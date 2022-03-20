@@ -131,3 +131,9 @@ dmypy.json
 
 # my stuff
 random-network-distillation/
+.virtual_documents
+
+HC ROMS
+ROMS
+/recordings
+/overige
