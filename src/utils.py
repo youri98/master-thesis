@@ -30,7 +30,7 @@ def visualize(recording: np.ndarray, fps: int = 120):
 
     print(f"saving {len(recording)//fps} seconds of recording...")
     start = time.time()
-    anim.save("recordings/recording.mp4", writer=writer, dpi=50)
+    anim.save("../recordings/recording.mp4", writer=writer, dpi=50)
     print(f"done saving! It took {time.time() - start} seconds")
 
 
