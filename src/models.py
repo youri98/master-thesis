@@ -1,14 +1,33 @@
 import os
 import numpy as np
+from sklearn.feature_selection import SelectFdr
 import torch as T
 import torch.nn as nn
 import torch.optim as optim
 from torch.distributions.categorical import Categorical
 from tqdm import tqdm
+import time
+from multiprocessing import Process
 
+class Module(nn.Module):
+    def __init__(self, chkpt_dir='tmp'):
+        super().__init__()
+
+        self.chkpt_counter = 0
+        self.chkpt_dir = chkpt_dir
+        
+    def save_checkpoint(self, model_name='default_'):
+        self.chkpt_counter += 1
+        checkpoint_file = self.chkpt_dir + f"{model_name}{self.chkpt_counter}"
+        checkpoint_file = checkpoint_file + "_best" if self.chkpt_counter == 1 else checkpoint_file
+        T.save(self.state_dict(), checkpoint_file)
+        
+    def load_checkpoint(self, model_name='default_'):
+        checkpoint_file = self.chkpt_dir + model_name
+        self.load_state_dict(T.load(checkpoint_file))
 
 class PPOMemory:
-    def __init__(self, batch_size) -> None:
+    def __init__(self, batch_size):
         self.states = []
         self.probs = []
         self.vals = []
@@ -50,43 +69,42 @@ class PPOMemory:
         self.rewards_i = []
         self.dones = []
 
+class RND():
+    def __init__(self, alpha=0.0003):
+        super().__init__()
+        self.target = RNDNetwork()
+        self.predictor = RNDNetwork()
+        self.predictor.chkpt_dir += '/predictor/'
+        self.target.chkpt_dir += '/target/'
 
-class RND(nn.Module):
-    def __init__(self, chkpt_dir='tmp/ppo', alpha=0.001):
-        super(RND, self).__init__()
 
-        self.target = CommonNetwork(filename='target')
-        self.predictor = CommonNetwork(filename='predictor')
-        
-        self.checkpoint_file = os.path.join(chkpt_dir, 'RND')
+        self.target.save_checkpoint()
 
         self.optimizer = optim.Adam(self.predictor.parameters(), lr=alpha)
         self.device = T.device('cuda:0' if T.cuda.is_available() else 'cpu')
-        self.to(self.device)
+        #self.to(self.device)
 
-    def forward(self, state):
+    def __call__(self, state):
         z_true = self.target(state).detach()
         z_pred = self.predictor(state)
         rnd_error = T.pow(z_pred - z_true, 2).sum(1)
 
         return rnd_error
 
-    def save_checkpoint(self):
-        T.save(self.state_dict(), self.checkpoint_file)
+    def save_checkpoint(self, model_name='default_'):
+        self.predictor.save_checkpoint(model_name)
 
-    def load_checkpoint(self):
-        self.load_state_dict(T.load(self.checkpoint_file))
+    def load_checkpoint(self, model_name='default_'):
+        self.target.load_checkpoint(model_name)
+        self.predictor.load_checkpoint(model_name)
 
-
-class CommonNetwork(nn.Module):
-    def __init__(self, conv1_dims=32, conv2_dims=64, conv3_dims=64, chkpt_dir='tmp/ppo', filename='CommonNN', alpha=0.001):
-        super(CommonNetwork, self).__init__()
-
+class RNDNetwork(Module):
+    def __init__(self, conv1_dims=32, conv2_dims=64, conv3_dims=64):
+        super().__init__()
         self.conv1_dims = conv1_dims
         self.conv2_dims = conv2_dims
         self.conv3_dims = conv3_dims
 
-        self.checkpoint_file = os.path.join(chkpt_dir, filename)
 
         self.encoder = nn.Sequential(
                 nn.Conv2d(1, conv1_dims, kernel_size=8, stride=4),
@@ -110,11 +128,11 @@ class CommonNetwork(nn.Module):
         enc = self.encoder(state)
         return enc
 
-class ActorNetwork(nn.Module):
-    def __init__(self, n_actions, conv1_dims=32, conv2_dims=64, conv3_dims=64, chkpt_dir='tmp/ppo', filename='actor', alpha=0.001):
-        super(ActorNetwork, self).__init__()
 
-        self.checkpoint_file = os.path.join(chkpt_dir, filename)
+class ActorNetwork(Module):
+    def __init__(self, n_actions, conv1_dims=32, conv2_dims=64, conv3_dims=64, alpha=0.0003):
+        super().__init__()
+        self.chkpt_dir = self.chkpt_dir + '/actor/'
 
         self.actor = nn.Sequential(
                 nn.Conv2d(1, conv1_dims, kernel_size=8, stride=4),
@@ -140,14 +158,6 @@ class ActorNetwork(nn.Module):
         dist = Categorical(dist)
         return dist
     
-    def save_checkpoint(self):
-        T.save(self.state_dict(), self.checkpoint_file)
-
-    def load_checkpoint(self):
-        self.load_state_dict(T.load(self.checkpoint_file))
-
-
-
 class PPOAgent:
     def __init__(self, n_actions, input_dims,  gamma=.99, alpha=.0003, gae_lambda=.95, policy_clip=.1, batch_size=64, N=2048, n_epochs=10):
         self.gamma = gamma
@@ -187,7 +197,7 @@ class PPOAgent:
         return action, probs, reward_i
 
     def learn(self, verbose=True):
-        for _ in tqdm(range(self.n_epochs)):
+        for epoch in tqdm(range(self.n_epochs), position=0, leave=True, disable=True):
             critic_epoch_loss = 0
             actor_epoch_loss = 0
 
@@ -197,9 +207,6 @@ class PPOAgent:
             reward_arr_i = self.critic(state_arr)
             # reward_arr_i = T.from_numpy(reward_arr_i).to(self.actor.device)
 
-            # TODO: formula
-
-            # TODO: separate critic from actor loss
             advantage = np.zeros(len(reward_arr_e), dtype=np.float32)
 
             for t in range(len(reward_arr_e)-1):
@@ -235,6 +242,7 @@ class PPOAgent:
 
                 actor_loss = -T.min(weighted_probs,
                                     weighted_clipped_probs).mean()
+                print(f"loss: {actor_loss}")
                                     
                 #returns = advantage[batch] + reward_arr_i[batch]
                 #critic_loss = (returns - critic_value) ** 2
@@ -243,20 +251,22 @@ class PPOAgent:
                 #total_loss = actor_loss + 0.5 * critic_loss
                 #total_loss.backward()
                 actor_epoch_loss += actor_loss.item()
+                critic_loss = critic_value.sum()
+                critic_epoch_loss += critic_loss.item()
 
+                #start = time.time()
                 self.actor.optimizer.zero_grad()
                 actor_loss.backward()
                 self.actor.optimizer.step()
 
-                critic_loss = critic_value.sum()
-                critic_epoch_loss += critic_loss.item()
-
                 self.critic.optimizer.zero_grad()
                 critic_loss.backward()
                 self.critic.optimizer.step()
+                #print(f"optimizing took {time.time() - start}")
 
             if verbose:
-                print(f"ACTOR LOSS: {actor_epoch_loss} \nCRITIC LOSS: {critic_epoch_loss}") 
+                with open('log.txt', 'a') as file:
+                    file.write(f"EPOCH {epoch} \nACTOR LOSS: {actor_epoch_loss} \nCRITIC LOSS: {critic_epoch_loss} \n \n") 
 
 
         self.memory.clear_memory()

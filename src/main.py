@@ -11,87 +11,121 @@ import matplotlib.animation as animation
 from collections import deque
 from queue import Queue
 from IPython import display
-from utils import rebin, visualize, setup_environment, plot_score, downscale
+from utils import rebin, setup_environment, plot_score, downscale, save_recordings, rename_best_model
 import datetime
 from models import PPOAgent, RND
 from utils import plot_learning_curve
 import torch as T
+from tqdm import tqdm
+import time
+from statistics import mean
+import os 
+import re
+from pathlib import Path
+
 
 random.seed(42)
 
 ROM = "MontezumaRevenge"
 
 
-def run_game(env: ALEInterface, track_score: bool = True, record: bool = False, downscaling: int = 5, max_frames: int = 1000):
+def run_game(env: ALEInterface, track_score: bool = True, record: bool = False, downscaling: int = 5, max_frames: int = np.inf):
     actions = env.getMinimalActionSet()
     n_actions = len(actions)
 
     recording = []
-    score = []
-    N = 200
+    N = 50
     batch_size = 50
     n_epochs = 4
     alpha = .0003
 
     obs_dim = env.getScreenGrayscale().shape
-    print(obs_dim)
 
     agent = PPOAgent(n_actions=n_actions, batch_size=batch_size,
                      alpha=alpha, n_epochs=n_epochs, input_dims=obs_dim)
 
-    rnd_agent = RND()
-    n_games = 1
+    n_games = 5
 
-    figure_file = 'plots/cartpole.png'
 
-    score_history = []
+    e_score_history = []
+    i_score_history = []
     learn_iters = 0
     avg_score = 0 
     n_steps = 0
+    best_score = 0
+    dims = env.getScreenGrayscale().shape
+    fps = 5
+    recordings = []
+    recording = []
+    total_i_score = []
+    total_e_score = []
 
-    for i in range(n_games):
+
+    open('log.txt', 'w').close()
+
+    for i in tqdm(range(n_games)):
         #observation = env.reset()
         done = False
-        score = 0
-        observation = env.getScreenGrayscale()
-        downscaled_obs = downscale(observation, 5)
-        print(downscaled_obs.shape)
-        r_i = 0
+        game_frames = 0
+        env.reset_game()
 
-        while not done and env.getEpisodeFrameNumber() < max_frames:
-            observation = T.tensor(env.getScreenGrayscale(), dtype=T.float)
+        while not done and game_frames < max_frames:
+            observation = env.getScreenGrayscale()
+
+            if record:
+                recording.append(observation)
+
+            observation = T.tensor(observation, dtype=T.float)
             observation = T.unsqueeze(observation, dim=0)
+
 
             action, prob, reward_i = agent.choose_action(observation)
             reward_e = env.act(action)
             done = env.game_over()
 
-            n_steps += 1
-            score += reward_e
+            e_score_history.append(reward_e)
+            i_score_history.append(reward_i)
             agent.remember(observation, action, prob, reward_e, reward_i, done)
-
-            if n_steps % N == 0:
-                agent.learn()
-                learn_iters += 1
             
+            n_steps += 1
+            game_frames += 1
+            if n_steps % N == 0:
+                #print(learn_iters)
+                agent.learn(verbose=True)
+                learn_iters += 1
+            # TODO: save checkpoint
 
-        score_history.append(score)
-        avg_score = np.mean(score_history[-100:])
+        recordings.append(recording)
+        total_e_score.append(e_score_history)
+        total_i_score.append(i_score_history)
 
-        if avg_score > best_score:
-            best_score = avg_score
+        recording = []
+
+        avg_score = np.mean(e_score_history[-100:])
+
+        if avg_score >= best_score:
             agent.save_models()
+            dir = os.getcwd()
+            dir +=  '/tmp'
 
-        print(f'episode {i} score: {score} avg_score {avg_score} time stepts {n_steps} learning steps {learn_iters}')
+            if i != 0:
+                rename_best_model(dir)
+                                
+            best_score = avg_score
 
-    x = [i+1 for i in range(len(score_history))]
-    plot_learning_curve(x, score_history, figure_file)
+        print(f'episode {i} \ne_score: {mean(e_score_history)} \ni_score: {mean(i_score_history)} \navg_score {avg_score} \ntime steps {n_steps} \nlearning steps {learn_iters}')
+        e_score_history, i_score_history = [], []
+
+    if record:
+        save_recordings(recordings, dims)
+
+    plot_score(total_e_score, total_i_score)
 
 
 
 def main():
     env = setup_environment(ROM)
-    run_game(env)
+    run_game(env, record=True)
 
 
 if __name__ == '__main__':
