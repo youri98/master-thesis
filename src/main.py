@@ -1,4 +1,5 @@
 import sys
+from config import get_params
 import numpy as np
 from ale_py import ALEInterface
 from ale_py.roms import Breakout, MontezumaRevenge
@@ -11,9 +12,9 @@ import matplotlib.animation as animation
 from collections import deque
 from queue import Queue
 from IPython import display
-from utils import rebin, setup_environment, plot_score, downscale, save_recordings, rename_best_model
+from utils import  setup_environment, plot_score, rename_best_model, delete_files
+import gym
 import datetime
-from models import PPOAgent, RND
 from utils import plot_learning_curve
 import torch as T
 from tqdm import tqdm
@@ -22,110 +23,137 @@ from statistics import mean
 import os 
 import re
 from pathlib import Path
-
+from config import argparse
+from brain import Brain
+from logger import Logger
+from torch.multiprocessing import Process, Pipe
+from runner import Worker
+from numpy import concatenate
 
 random.seed(42)
+def run_workers(worker, conn):
+    worker.step(conn)
 
-ROM = "MontezumaRevenge"
 
-
-def run_game(env: ALEInterface, track_score: bool = True, record: bool = False, downscaling: int = 5, max_frames: int = np.inf):
-    actions = env.getMinimalActionSet()
-    n_actions = len(actions)
-
+def train_model(track_score: bool = True, record: bool = False, downscaling: int = 5, max_frames: int = np.inf):
     recording = []
-    N = 50
-    batch_size = 50
-    n_epochs = 4
-    alpha = .0003
 
-    obs_dim = env.getScreenGrayscale().shape
+    config = get_params()
+    temp_env = gym.make(config["env_name"])
+    config.update({"n_actions": temp_env.action_space.n})
+    temp_env.close()
 
-    agent = PPOAgent(n_actions=n_actions, batch_size=batch_size,
-                     alpha=alpha, n_epochs=n_epochs, input_dims=obs_dim)
+    config.update({"batch_size": (config["rollout_length"] * config["n_workers"]) // config["n_mini_batch"]})
+    config.update({"predictor_proportion": 32 / config["n_workers"]})
 
-    n_games = 5
+    brain = Brain(**config)
+    logger = Logger(brain, **config)
+    workers = [Worker(i, **config) for i in range(config["n_workers"])]
+    
+    init_iteration = 0
+    episode = 0
+    visited_rooms = set([1])
+    workers = [Worker(i, **config) for i in range(config["n_workers"])]
 
+    parents = []
+    for worker in workers:
+        parent_conn, child_conn = Pipe()
+        p = Process(target=run_workers, args=(worker, child_conn,))
+        p.daemon = True
+        parents.append(parent_conn)
+        p.start()
 
-    e_score_history = []
-    i_score_history = []
-    learn_iters = 0
-    avg_score = 0 
-    n_steps = 0
-    best_score = 0
-    dims = env.getScreenGrayscale().shape
-    fps = 5
-    recordings = []
-    recording = []
-    total_i_score = []
-    total_e_score = []
+    # if config["train_from_scratch"]:
 
-
-    open('log.txt', 'w').close()
-
-    for i in tqdm(range(n_games)):
-        #observation = env.reset()
-        done = False
-        game_frames = 0
-        env.reset_game()
-
-        while not done and game_frames < max_frames:
-            observation = env.getScreenGrayscale()
-
-            if record:
-                recording.append(observation)
-
-            observation = T.tensor(observation, dtype=T.float)
-            observation = T.unsqueeze(observation, dim=0)
+    rollout_base_shape = config["n_workers"], config["rollout_length"]
 
 
-            action, prob, reward_i = agent.choose_action(observation)
-            reward_e = env.act(action)
-            done = env.game_over()
+    logger.on()
+    episode_ext_reward = 0
 
-            e_score_history.append(reward_e)
-            i_score_history.append(reward_i)
-            agent.remember(observation, action, prob, reward_e, reward_i, done)
-            
-            n_steps += 1
-            game_frames += 1
-            if n_steps % N == 0:
-                #print(learn_iters)
-                agent.learn(verbose=True)
-                learn_iters += 1
-            # TODO: save checkpoint
+    for iteration in tqdm(range(init_iteration + 1, config["total_rollouts_per_env"] + 1)):
+        total_states = np.zeros(rollout_base_shape + config["state_shape"], dtype=np.uint8)
+        total_actions = np.zeros(rollout_base_shape, dtype=np.uint8)
+        total_action_probs = np.zeros(rollout_base_shape + (config["n_actions"],))
+        total_int_rewards = np.zeros(rollout_base_shape)
+        total_ext_rewards = np.zeros(rollout_base_shape)
+        total_dones = np.zeros(rollout_base_shape, dtype=bool)
+        total_int_values = np.zeros(rollout_base_shape)
+        total_ext_values = np.zeros(rollout_base_shape)
+        total_log_probs = np.zeros(rollout_base_shape)
+        next_states = np.zeros((rollout_base_shape[0],) + config["state_shape"], dtype=np.uint8)
+        total_next_obs = np.zeros(rollout_base_shape + config["obs_shape"], dtype=np.uint8)
 
-        recordings.append(recording)
-        total_e_score.append(e_score_history)
-        total_i_score.append(i_score_history)
 
-        recording = []
+        for t in range(config["rollout_length"]):
+            for worker_id, parent in enumerate(parents):
+                total_states[worker_id, t] = parent.recv()
 
-        avg_score = np.mean(e_score_history[-100:])
+            total_actions[:, t], total_int_values[:, t], total_ext_values[:, t], total_log_probs[:, t], \
+            total_action_probs[:, t] = brain.get_actions_and_values(total_states[:, t], batch=True)
+            for parent, a in zip(parents, total_actions[:, t]):
+                parent.send(a)
 
-        if avg_score >= best_score:
-            agent.save_models()
-            dir = os.getcwd()
-            dir +=  '/tmp'
+            infos = []
+            for worker_id, parent in enumerate(parents):
+                state_, reward, done, info = parent.recv()
+                infos.append(info)
+                total_ext_rewards[worker_id, t] = reward
+                total_dones[worker_id, t] = done
+                next_states[worker_id] = state_
+                total_next_obs[worker_id, t] = state_[-1, ...]
 
-            if i != 0:
-                rename_best_model(dir)
-                                
-            best_score = avg_score
+                if worker_id == 0:
+                    recording.append(state_)
 
-        print(f'episode {i} \ne_score: {mean(e_score_history)} \ni_score: {mean(i_score_history)} \navg_score {avg_score} \ntime steps {n_steps} \nlearning steps {learn_iters}')
-        e_score_history, i_score_history = [], []
+            episode_ext_reward += total_ext_rewards[0, t]
+            if total_dones[0, t]:
+                episode += 1
+                if "episode" in infos[0]:
+                    visited_rooms = infos[0]["episode"]["visited_room"]
+                    #logger.log_episode(episode, episode_ext_reward, visited_rooms)
+                episode_ext_reward = 0
 
-    if record:
-        save_recordings(recordings, dims)
+        total_next_obs = concatenate(total_next_obs)
+        total_int_rewards = brain.calculate_int_rewards(total_next_obs)
+        _, next_int_values, next_ext_values, * \
+            _ = brain.get_actions_and_values(next_states, batch=True)
 
-    plot_score(total_e_score, total_i_score)
+        total_int_rewards = brain.normalize_int_rewards(total_int_rewards)
+
+        pg_losses, ext_value_losses, int_value_losses, rnd_losses, entropies = brain.train(states=concatenate(total_states),
+                                                                                           actions=concatenate(
+                                                                                               total_actions),
+                                                                                           int_rewards=total_int_rewards,
+                                                                                           ext_rewards=total_ext_rewards,
+                                                                                           dones=total_dones,
+                                                                                           int_values=total_int_values,
+                                                                                           ext_values=total_ext_values,
+                                                                                           log_probs=concatenate(
+                                                                                               total_log_probs),
+                                                                                           next_int_values=next_int_values,
+                                                                                           next_ext_values=next_ext_values,
+                                                                                           total_next_obs=total_next_obs)
+
+        logger.log_iteration(iteration,
+                                pg_losses,
+                                ext_value_losses,
+                                int_value_losses,
+                                rnd_losses,
+                                entropies,
+                                total_int_rewards[0].mean(),
+                                total_ext_rewards[0].mean(),
+                                total_action_probs[0].max(-1).mean(),
+                                )
+        #save_recording(recording, (84, 84))
+        logger.log_recording(recording)
 
 
 
 def main():
-    env = setup_environment(ROM)
-    run_game(env, record=True)
+    delete_files()
+
+    train_model(record=True)
 
 
 if __name__ == '__main__':

@@ -141,3 +141,7 @@ ROMS
 /plots
 /tmp
 todo.txt
+/Models
+/PPO-RND
+/wandb
+.vscode

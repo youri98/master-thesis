@@ -1,51 +1,25 @@
-import gym
-import numpy as np
-from models import PPOAgent
-from utils import plot_learning_curve
+import plotly.graph_objects as go
 
-if __name__ == '__main__':
-    env = gym.make('CartPole-v0')
-    N = 20
-    batch_size = 5
-    n_epochs = 4
-    alpha = .0003
-    print(env.action_space.n)
-    agent = PPOAgent(n_actions=env.action_space.n, batch_size=batch_size,
-                     alpha=alpha, n_epochs=n_epochs, input_dims=env.observation_space.shape)
-    n_games = 300
+fig = go.Figure()
 
-    figure_file = 'plots/cartpole.png'
+fig.add_trace(go.Bar(
+    x=["2020-01-01", "2020-04-01", "2020-07-01"],
+    y=[1000, 1500, 1700],
+    xperiod="M3",
+    xperiodalignment="middle",
+    xhoverformat="Q%q",
+    hovertemplate="%{y}%{_xother}"
+))
 
-    best_score = env.reward_range[0]
-    score_history = []
-    learn_iters = 0
-    avg_score = 0 
-    n_steps = 0
+fig.add_trace(go.Scatter(
+    x=["2020-01-01", "2020-02-01", "2020-03-01",
+      "2020-04-01", "2020-05-01", "2020-06-01",
+      "2020-07-01", "2020-08-01", "2020-09-01"],
+    y=[1100,1050,1200,1300,1400,1700,1500,1400,1600],
+    xperiod="M1",
+    xperiodalignment="middle",
+    hovertemplate="%{y}%{_xother}"
+))
 
-    for i in range(n_games):
-        observation = env.reset()
-        done = False
-        score = 0
-
-        while not done:
-            action, prob, val = agent.choose_action(observation)
-            observation_, reward, done, info = env.step(action)
-            n_steps += 1
-            score += reward
-            agent.remember(observation, action, prob, val, reward, done)
-
-            if n_steps % N == 0:
-                agent.learn()
-                learn_iters += 1
-            observation = observation_
-        score_history.append(score)
-        avg_score = np.mean(score_history[-100:])
-
-        if avg_score > best_score:
-            best_score = avg_score
-            agent.save_models()
-
-        print(f'episode {i} score: {score} avg_score {avg_score} time stepts {n_steps} learning steps {learn_iters}')
-
-    x = [i+1 for i in range(len(score_history))]
-    plot_learning_curve(x, score_history, figure_file)
+fig.update_layout(hovermode="x unified")
+fig.show()
