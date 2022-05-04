@@ -8,7 +8,7 @@ from utils import mean_of_list, RunningMeanStd
 
 torch.backends.cudnn.benchmark = True
 
-class Brain:
+class RND:
     def __init__(self, **config):
         self.config = config
         self.mini_batch_size = self.config["batch_size"]
@@ -106,6 +106,7 @@ class Brain:
         total_next_obs = ((total_next_obs - self.state_rms.mean) / (self.state_rms.var ** 0.5)).clip(-5, 5)
 
         pg_losses, ext_value_losses, int_value_losses, rnd_losses, entropies = [], [], [], [], []
+        disc_losses = [] # just for sake of compatibility
         for epoch in range(self.config["n_epochs"]):
             for state, action, int_return, ext_return, adv, old_log_prob, next_state in \
                     self.choose_mini_batch(states=states,
@@ -138,7 +139,7 @@ class Brain:
                 entropies.append(entropy.item())
                 # https://github.com/openai/random-network-distillation/blob/f75c0f1efa473d5109d487062fd8ed49ddce6634/ppo_agent.py#L187
 
-        return pg_losses, ext_value_losses, int_value_losses, rnd_losses, entropies#, int_values, int_rets, ext_values, ext_rets
+        return pg_losses, ext_value_losses, int_value_losses, rnd_losses, disc_losses, entropies#, int_values, int_rets, ext_values, ext_rets
     
     def calculate_int_rewards(self, next_states, batch=True):
         if not batch:

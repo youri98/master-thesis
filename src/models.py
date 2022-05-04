@@ -4,6 +4,7 @@ from torch.distributions.categorical import Categorical
 from abc import ABC
 from torch.nn import functional as F
 from utils import conv_shape
+import torch
 
 class PolicyModel(nn.Module, ABC):
     def __init__(self, state_shape, n_actions):
@@ -141,21 +142,49 @@ class PredictorModel(nn.Module, ABC):
         return self.seq(state)
 
 class DiscriminatorModel(nn.Module, ABC):
-    def __init__(self, encoding_size=512):
+    def __init__(self, encoding_size=512, hidden_size=32, rollout_len=1, n_layers=10):
         super(DiscriminatorModel, self).__init__()
-
-        self.seq = nn.Sequential(
-            nn.LSTM(encoding_size, 10, 64),
-            nn.LSTM(64, 10, 64), 
-            nn.Linear(128, 1)
+        
+        self.rnn = nn.LSTM(input_size=encoding_size, hidden_size=hidden_size, num_layers=n_layers)
+        
+        self.fc = nn.Sequential(
+            nn.Linear(rollout_len * hidden_size, 256),
+            nn.ReLU(),
+            nn.Linear(256, 1),
+            nn.Sigmoid()
         )
-            
 
-        for layer in self.seq.children():
+        self.encoding_size = encoding_size
+        self.rollout_len = rollout_len
+        self.h = torch.randn(n_layers, rollout_len, hidden_size)
+        self.c = torch.randn(n_layers, rollout_len, hidden_size)
+
+        for layer in self.fc.children():
             if isinstance(layer, nn.Conv2d) or isinstance(layer, nn.Linear):
                 nn.init.orthogonal_(layer.weight, gain=np.sqrt(2))
                 layer.bias.data.zero_()
 
 
-    def forward(self, encoding, source):
-        pass
+    def forward(self, rand_encoding, true_encoding):
+        y = torch.zeros((len(rand_encoding), 1), requires_grad=True)
+
+        #rand_encoding = rand_encoding.view(-1, self.rollout_len, true_encoding.shape[-1])
+        #true_encoding = true_encoding.view(-1, self.rollout_len, true_encoding.shape[-1])
+
+        with torch.no_grad():
+            for t in range(0, len(rand_encoding)*self.rollout_len, self.rollout_len):
+                lstm_rollout_output, (h_, c_) = self.rnn(rand_encoding[t:t + self.rollout_len], (self.h, self.c))
+                lstm_rollout_output = nn.Flatten(start_dim=1)(lstm_rollout_output)
+                temp = self.fc(lstm_rollout_output)
+                y[t : t+self.rollout_len, ...] = self.fc(lstm_rollout_output)
+
+                _, (self.h, self.c) = self.rnn(true_encoding[t:t + self.rollout_len], (self.h, self.c))
+
+            
+            #lstm_out = lstm_output.contiguous().view(-1, self.hidden_dim)
+            #lstm_out = nn.Flatten()(lstm_output)
+
+        
+        return y
+
+

@@ -1,5 +1,9 @@
 import argparse
+import wandb
+import os
 
+with open("key.txt", "r") as personal_key:
+    os.environ["WANDB_API_KEY"] = personal_key.read()
 
 def get_params():
     parser = argparse.ArgumentParser(
@@ -40,6 +44,8 @@ def get_params():
                       "ent_coeff": 0.001,
                       "clip_range": 0.1,
                       "pre_normalization_steps": 50,
+                      "mode": "train_from_scratch",
+                      "record_local": True
                       }
 
     # endregion

@@ -16,6 +16,7 @@ import torch
 from torch._six import inf
 from ale_py import ALEInterface
 from ale_py.roms import Breakout, MontezumaRevenge
+import shutil
 
 def conv_shape(input_dims, kernel_size, stride, padding=0):
     return ((input_dims[0] + 2 * padding - kernel_size) // stride + 1,
@@ -54,17 +55,17 @@ def plot_learning_curve(x, scores, figure_file):
     plt.title('Running average of previous 100 scores')
     plt.savefig(figure_file)
 
-def rename_best_model(dir):
-    for folder in ["/actor/", "/predictor/"]:
-        p = dir + folder
-        model_names = [name for name in os.listdir(p)]
-        new_best = model_names[-1]
-        prev_best =  list(filter(lambda v: re.match('.*_best', v), model_names))[0]
-        if new_best == prev_best:
-            continue
-        rename = prev_best.replace('_best', '')
-        os.rename(p+prev_best, p+rename)
-        os.rename(p+new_best, p+new_best+"_best")
+# def rename_best_model(dir):
+#     for folder in ["/actor/", "/predictor/"]:
+#         p = dir + folder
+#         model_names = [name for name in os.listdir(p)]
+#         new_best = model_names[-1]
+#         prev_best =  list(filter(lambda v: re.match('.*_best', v), model_names))[0]
+#         if new_best == prev_best:
+#             continue
+#         rename = prev_best.replace('_best', '')
+#         os.rename(p+prev_best, p+rename)
+#         os.rename(p+new_best, p+new_best+"_best")
 
 def delete_files():
     dir = os.getcwd()
@@ -74,8 +75,10 @@ def delete_files():
         p = dir + folder
         file_names = [name for name in os.listdir(p)]
         for file in file_names:
-            os.remove(p+file)
-
+            try:
+                os.remove(p+file)
+            except:
+                shutil.rmtree(p+file)
 
 
 def mean_of_list(func):
@@ -249,17 +252,17 @@ def update_mean_var_count_from_moments(mean, var, count, batch_mean, batch_var, 
     return new_mean, new_var, new_count
 
 
-class RewardForwardFilter(object):
-    def __init__(self, gamma):
-        self.rewems = None
-        self.gamma = gamma
+# class RewardForwardFilter(object):
+#     def __init__(self, gamma):
+#         self.rewems = None
+#         self.gamma = gamma
 
-    def update(self, rews):
-        if self.rewems is None:
-            self.rewems = rews
-        else:
-            self.rewems = self.rewems * self.gamma + rews
-        return self.rewems
+#     def update(self, rews):
+#         if self.rewems is None:
+#             self.rewems = rews
+#         else:
+#             self.rewems = self.rewems * self.gamma + rews
+#         return self.rewems
 
 
 # def clip_grad_norm_(parameters, norm_type: float = 2.0):
