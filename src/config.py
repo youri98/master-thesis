@@ -30,7 +30,7 @@ def get_params():
     default_params = {"env_name": "MontezumaRevengeNoFrameskip-v4",
                       "state_shape": (4, 84, 84),
                       "obs_shape": (1, 84, 84),
-                      "total_rollouts_per_env": int(8), #30e3
+                      "total_rollouts_per_env": int(128), #30e3
                       "max_frames_per_episode": 4500,  # 4500 * 4 = 18K :D
                       "rollout_length": 128,
                       "n_epochs": 4,

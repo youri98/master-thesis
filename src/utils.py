@@ -2,17 +2,14 @@ from ale_py import ALEInterface
 from ale_py.roms import Breakout, MontezumaRevenge
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
-import time
 import typing
 import numpy as np
 from typing import List, Set, Dict, Tuple, Optional
 import datetime
 import cv2
 import os
-import re
 import gym
 from copy import deepcopy
-import torch
 from torch._six import inf
 from ale_py import ALEInterface
 from ale_py.roms import Breakout, MontezumaRevenge
@@ -55,17 +52,6 @@ def plot_learning_curve(x, scores, figure_file):
     plt.title('Running average of previous 100 scores')
     plt.savefig(figure_file)
 
-# def rename_best_model(dir):
-#     for folder in ["/actor/", "/predictor/"]:
-#         p = dir + folder
-#         model_names = [name for name in os.listdir(p)]
-#         new_best = model_names[-1]
-#         prev_best =  list(filter(lambda v: re.match('.*_best', v), model_names))[0]
-#         if new_best == prev_best:
-#             continue
-#         rename = prev_best.replace('_best', '')
-#         os.rename(p+prev_best, p+rename)
-#         os.rename(p+new_best, p+new_best+"_best")
 
 def delete_files():
     dir = os.getcwd()
@@ -84,7 +70,7 @@ def delete_files():
 def mean_of_list(func):
     def function_wrapper(*args, **kwargs):
         lists = func(*args, **kwargs)
-        return [sum(list) / len(list) for list in lists] #+ [explained_variance(lists[-4], lists[-3])] + \
+        return [sum(l) / len(l) if l else 0 for l in lists] #+ [explained_variance(lists[-4], lists[-3])] + \
                #[explained_variance(lists[-2], lists[-1])]
 
     return function_wrapper

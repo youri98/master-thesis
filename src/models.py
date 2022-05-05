@@ -142,22 +142,26 @@ class PredictorModel(nn.Module, ABC):
         return self.seq(state)
 
 class DiscriminatorModel(nn.Module, ABC):
-    def __init__(self, encoding_size=512, hidden_size=32, rollout_len=1, n_layers=10):
+    def __init__(self, encoding_size=512, hidden_size=128, timesteps=32, n_layers=3, pred_size=1):
         super(DiscriminatorModel, self).__init__()
         
         self.rnn = nn.LSTM(input_size=encoding_size, hidden_size=hidden_size, num_layers=n_layers)
-        
+        self.pred_size = pred_size
+
         self.fc = nn.Sequential(
-            nn.Linear(rollout_len * hidden_size, 256),
+            nn.Linear(timesteps * hidden_size, 512),
             nn.ReLU(),
-            nn.Linear(256, 1),
+            nn.Linear(512, 512),
+            nn.ReLU(),
+            nn.Linear(512, self.pred_size), #encoding size for multiple, 
             nn.Sigmoid()
         )
-
+        
+        self.hidden_size = hidden_size
         self.encoding_size = encoding_size
-        self.rollout_len = rollout_len
-        self.h = torch.randn(n_layers, rollout_len, hidden_size)
-        self.c = torch.randn(n_layers, rollout_len, hidden_size)
+        self.timesteps = timesteps
+        self.h = torch.randn(n_layers, timesteps, hidden_size)
+        self.c = torch.randn(n_layers, timesteps, hidden_size)
 
         for layer in self.fc.children():
             if isinstance(layer, nn.Conv2d) or isinstance(layer, nn.Linear):
@@ -166,25 +170,28 @@ class DiscriminatorModel(nn.Module, ABC):
 
 
     def forward(self, rand_encoding, true_encoding):
-        y = torch.zeros((len(rand_encoding), 1), requires_grad=True)
+        y = torch.zeros((len(rand_encoding), self.encoding_size), requires_grad=True)
 
-        #rand_encoding = rand_encoding.view(-1, self.rollout_len, true_encoding.shape[-1])
-        #true_encoding = true_encoding.view(-1, self.rollout_len, true_encoding.shape[-1])
+        rand_encoding = rand_encoding.view(-1, self.timesteps, true_encoding.shape[-1])
+        true_encoding = true_encoding.view(-1, self.timesteps, true_encoding.shape[-1])
 
         with torch.no_grad():
-            for t in range(0, len(rand_encoding)*self.rollout_len, self.rollout_len):
-                lstm_rollout_output, (h_, c_) = self.rnn(rand_encoding[t:t + self.rollout_len], (self.h, self.c))
-                lstm_rollout_output = nn.Flatten(start_dim=1)(lstm_rollout_output)
-                temp = self.fc(lstm_rollout_output)
-                y[t : t+self.rollout_len, ...] = self.fc(lstm_rollout_output)
+            lstm_rollout_output, (h_, c_) = self.rnn(rand_encoding, (self.h, self.c))
+            lstm_rollout_output = nn.Flatten(start_dim=1)(lstm_rollout_output)
+            y_hat = self.fc(lstm_rollout_output)
+            _, (self.h, self.c) = self.rnn(true_encoding, (self.h, self.c))
+                   
+        # else:
+        #     with torch.no_grad():
+        #         for t in range(0, len(rand_encoding)*self.timesteps, self.timesteps):
+        #             lstm_rollout_output, (h_, c_) = self.rnn(rand_encoding[t:t + self.timesteps], (self.h, self.c))
+        #             lstm_rollout_output = nn.Flatten(start_dim=1)(lstm_rollout_output)
+        #             temp = self.fc(lstm_rollout_output)
+        #             y[t : t+self.timesteps, ...] = self.fc(lstm_rollout_output)
 
-                _, (self.h, self.c) = self.rnn(true_encoding[t:t + self.rollout_len], (self.h, self.c))
+        #             _, (self.h, self.c) = self.rnn(true_encoding[t:t + self.timesteps], (self.h, self.c))
 
-            
-            #lstm_out = lstm_output.contiguous().view(-1, self.hidden_dim)
-            #lstm_out = nn.Flatten()(lstm_output)
-
-        
-        return y
+        y_hat = y_hat.view(-1, self.pred_size)
+        return y_hat
 
 

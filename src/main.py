@@ -1,7 +1,6 @@
 from config import get_params
 import numpy as np
 from numpy import concatenate
-from utils import delete_files
 import gym
 from tqdm import tqdm
 from rnd import RND
@@ -10,6 +9,8 @@ from logger import Logger
 from torch.multiprocessing import Process, Pipe
 from runner import Worker
 import torch
+import wandb
+
 
 torch.autograd.set_detect_anomaly(True)
 
@@ -17,7 +18,7 @@ torch.autograd.set_detect_anomaly(True)
 def run_workers(worker, conn):
     worker.step(conn)
 
-def train_model(model_name=None, n_to_chkpt=3):
+def train_model(model_name=None, n_to_chkpt=10, model_type="APE"):
     recording = []
 
     config = get_params()
@@ -28,7 +29,7 @@ def train_model(model_name=None, n_to_chkpt=3):
     config.update({"batch_size": (config["rollout_length"] * config["n_workers"]) // config["n_mini_batch"]})
     config.update({"predictor_proportion": 32 / config["n_workers"]})
 
-    agent = APE(**config)
+    agent = APE(**config) if model_type == "APE" else RND(**config)
     logger = Logger(agent, resume=config["mode"] == "train_from_chkpt", **config)
 
     workers = [Worker(i, **config) for i in range(config["n_workers"])]
@@ -61,7 +62,6 @@ def train_model(model_name=None, n_to_chkpt=3):
     else:
         rollout_base_shape = config["n_workers"], config["rollout_length"]
 
-        logger.time_start()
         for iteration in tqdm(range(init_iteration, config["total_rollouts_per_env"])):
             total_states = np.zeros(rollout_base_shape + config["state_shape"], dtype=np.uint8)
             total_actions = np.zeros(rollout_base_shape, dtype=np.uint8)
@@ -74,6 +74,7 @@ def train_model(model_name=None, n_to_chkpt=3):
             total_log_probs = np.zeros(rollout_base_shape)
             next_states = np.zeros((rollout_base_shape[0],) + config["state_shape"], dtype=np.uint8)
             total_next_obs = np.zeros(rollout_base_shape + config["obs_shape"], dtype=np.uint8)
+            logger.time_start()
 
             for t in range(config["rollout_length"]):
                 infos = []
@@ -126,18 +127,23 @@ def train_model(model_name=None, n_to_chkpt=3):
                                                         next_int_values=next_int_values,
                                                         next_ext_values=next_ext_values,
                                                         total_next_obs=total_next_obs)
+            logger.time_stop()
             logger.log_iteration(iteration,
                                     train_logs,
                                     total_int_rewards[0].mean(),
                                     total_ext_rewards[0].mean(),
                                     total_action_probs[0].max(-1).mean(),
                                     )
+            logger.log_recording(recording)
 
             if iteration % n_to_chkpt == 0 or iteration == config["total_rollouts_per_env"]:
                 logger.save_params(episode, iteration)
-                logger.save_recording(recording)
+                logger.save_recording_local(recording)
                 logger.time_stop()
 
 if __name__ == '__main__':
     #delete_files()
     train_model()
+    wandb.finish()
+    train_model(model_type="RND")
+    wandb.finish()

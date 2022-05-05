@@ -5,7 +5,7 @@ from torch import from_numpy
 import numpy as np
 from numpy import concatenate  # Make coder faster.
 from torch.optim.adam import Adam
-from utils import mean_of_list, RunningMeanStd
+from utils import mean_of_list
 
 torch.backends.cudnn.benchmark = True
 
@@ -13,7 +13,12 @@ class APE(RND):
     def __init__(self, **config):
         super(APE, self).__init__(**config)
 
-        self.discriminator = DiscriminatorModel()
+        self.encoding_size = 512
+        self.multiple_feature_pred = False
+        self.timesteps = 16
+        self.pred_size = self.encoding_size if self.multiple_feature_pred else 1
+
+        self.discriminator = DiscriminatorModel(encoding_size=self.encoding_size, timesteps=self.timesteps, pred_size=self.pred_size)
 
         for param in self.target_model.parameters():
             param.requires_grad = False
@@ -21,8 +26,8 @@ class APE(RND):
         self.total_trainable_params = list(self.current_policy.parameters()) + list(self.predictor_model.parameters()) + list(self.discriminator.parameters())
         self.optimizer = Adam(self.total_trainable_params, lr=self.config["lr"])
 
-        self.bce_loss = torch.nn.L1Loss(reduction='none')
-        self.rollout_len = 4
+        self.f1_loss = torch.nn.L1Loss(reduction='none')# if self.pred_size == 1 else torch.nn.L1Loss() 
+
 
     @mean_of_list
     def train(self, states, actions, int_rewards,
@@ -89,30 +94,21 @@ class APE(RND):
         next_states = np.clip((next_states - self.state_rms.mean) / (self.state_rms.var ** 0.5), -5, 5,
                               dtype="float32")  # dtype to avoid '.float()' call for pytorch.
         next_states = from_numpy(next_states).to(self.device)
-        predictor_encoded_features = self.predictor_model(next_states)
-        target_encoded_features = self.target_model(next_states)
+        predictor_encoded_features = self.predictor_model(next_states).detach()
+        target_encoded_features = self.target_model(next_states).detach()
 
         if batch:
+            mask = torch.randint(0, 2, size=(len(target_encoded_features)//self.timesteps, self.pred_size))
+            mask = torch.kron(mask, torch.ones(self.timesteps, dtype=torch.uint8)).view(len(target_encoded_features), -1)
+            mask_inv = torch.where((mask==0)|(mask==1), mask^1, mask)
 
-            mask = np.random.choice([True, False], size=len(predictor_encoded_features)/self.rollout_len, p=[.5,.5])
-            features = []
+            temp_p = predictor_encoded_features*mask_inv
+            temp_t = target_encoded_features*mask
+            features = temp_p + temp_t
 
-            for t, booly in enumerate(mask):
-                if booly:
-                    features.append(predictor_encoded_features[t : t+self.rollout_len, ...])
-                else:
-                    features.append(target_encoded_features[t : t+self.rollout_len, ...])
-
-
-
-            temp = [(t,m) if m else (p,m) for p,t,m in zip(predictor_encoded_features, target_encoded_features, mask)]
-            features, y_true = zip(*temp)
-            y_true = torch.unsqueeze(torch.tensor(y_true, dtype=torch.float32), dim=1)
-            features = torch.stack(features)
-            features = torch.unsqueeze(features, dim=1)
-            target_encoded_features = torch.unsqueeze(target_encoded_features, dim=1)
             disc_preds = self.discriminator(features, target_encoded_features)
-            disc_loss = self.bce_loss(disc_preds, y_true)
+            disc_preds = torch.kron(disc_preds, torch.ones(self.timesteps)).view(len(target_encoded_features), -1)
+            disc_loss = self.f1_loss(disc_preds, mask) if self.pred_size == 1 else torch.mean(self.f1_loss(disc_preds, mask), 1)
 
         if not batch:
             return disc_loss.detach().cpu().numpy()
@@ -120,24 +116,27 @@ class APE(RND):
             return disc_loss.detach().cpu().numpy().reshape((self.config["n_workers"], self.config["rollout_length"]))
 
     def calculate_discriminator_loss(self, next_state):
-        target_encoded_features = self.target_model(next_state)
-        predictor_encoded_features = self.predictor_model(next_state)
+        target_encoded_features = self.target_model(next_state).detach()
+        predictor_encoded_features = self.predictor_model(next_state).detach()
 
-        mask = np.random.choice([True, False], size=len(predictor_encoded_features), p=[.5,.5])
-        temp = [(t,m) if m else (p,m) for p,t,m in zip(predictor_encoded_features, target_encoded_features, mask)]
-        features, y_true = zip(*temp)
-        y_true = torch.unsqueeze(torch.tensor(y_true, dtype=torch.float32), dim=1)
-        features = torch.stack(features)
-        features = torch.unsqueeze(features, dim=1)
-        target_encoded_features = torch.unsqueeze(target_encoded_features, dim=1)
+        mask = torch.randint(0, 2, size=(len(target_encoded_features)//self.timesteps, self.pred_size))
+        mask = torch.kron(mask, torch.ones(self.timesteps, dtype=torch.uint8)).view(len(target_encoded_features), -1)
+
+        mask_inv = torch.where((mask==0)|(mask==1), mask^1, mask)
+            
+        temp_p = predictor_encoded_features*mask_inv
+        temp_t = target_encoded_features*mask
+        features = temp_p + temp_t
 
         disc_preds = self.discriminator(features, target_encoded_features)
-        loss = self.bce_loss(disc_preds, y_true)
+        disc_preds = torch.kron(disc_preds, torch.ones(self.timesteps)).view(len(target_encoded_features), -1)
+        disc_loss = self.f1_loss(disc_preds, mask) if self.pred_size == 1 else torch.mean(self.f1_loss(disc_preds, mask), 1)
         
-        mask = torch.rand(loss.size(), device=self.device)
+        mask = torch.rand(disc_loss.size(), device=self.device)
         mask = (mask < self.config["predictor_proportion"]).float()
-        loss = (mask * loss).sum() / torch.max(mask.sum(), torch.Tensor([1]).to(self.device))
-        return loss
+        disc_loss = (mask * disc_loss).sum() / torch.max(mask.sum(), torch.Tensor([1]).to(self.device))
+
+        return disc_loss
 
 
     def set_from_checkpoint(self, checkpoint): # TODO: add discr

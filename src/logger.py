@@ -57,9 +57,10 @@ class Logger:
     def time_stop(self):
         self.duration += (time.time() - self.start_time)
 
-    def save_recording(self, recording, fps=60):
+    def log_recording(self, recording, fps=60):
         wandb.log({"video": wandb.Video(np.array(recording), fps=fps, format='gif')})
 
+    def save_recording_local(self, recording, fps=60):
         if self.config["record_local"]:
             frame_size = (self.config["obs_shape"][2], self.config["obs_shape"][1])
 
@@ -101,6 +102,7 @@ class Logger:
             "RND Loss": rnd_losses,
             "Discriminator Loss": disc_losses,
             "Entropy": entropies,
+            "Time": self.duration,
             # "Intrinsic Explained variance": self.running_training_logs[5],
             # "Extrinsic Explained variance": self.running_training_logs[6],
         })
