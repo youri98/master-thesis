@@ -1,20 +1,15 @@
-import matplotlib.pyplot as plt
-import matplotlib.animation as animation
-import typing
 import numpy as np
-from typing import List, Set, Dict, Tuple, Optional
-import datetime
 import cv2
 import os
 import gym
 from copy import deepcopy
-from torch._six import inf
 import shutil
+
 
 def conv_shape(input_dims, kernel_size, stride, padding=0):
     return ((input_dims[0] + 2 * padding - kernel_size) // stride + 1,
             (input_dims[1] + 2 * padding - kernel_size) // stride + 1)
-            
+
 
 # def setup_environment(rom: str) -> ALEInterface:
 #     game_dict = {"MontezumaRevenge": MontezumaRevenge,
@@ -24,7 +19,7 @@ def conv_shape(input_dims, kernel_size, stride, padding=0):
 #     return ale
 
 # def plot_score(total_e_score, total_i_score):
-        
+
 #     figure_file = 'plots/score.png'
 #     fig = plt.figure(1, figsize=(8, 3))
 #     #plt.ylim(ymin=0)
@@ -52,7 +47,7 @@ def delete_files():
     dir = os.getcwd()
 
     for folder in ["/Models/"]:
-        
+
         p = dir + folder
         file_names = [name for name in os.listdir(p)]
         for file in file_names:
@@ -65,8 +60,8 @@ def delete_files():
 def mean_of_list(func):
     def function_wrapper(*args, **kwargs):
         lists = func(*args, **kwargs)
-        return [sum(l) / len(l) if len(l) != 0 else 0 for l in lists] #+ [explained_variance(lists[-4], lists[-3])] + \
-               #[explained_variance(lists[-2], lists[-1])]
+        return [sum(l) / len(l) if len(l) != 0 else 0 for l in lists]  # + [explained_variance(lists[-4], lists[-3])] + \
+        #[explained_variance(lists[-2], lists[-1])]
 
     return function_wrapper
 
@@ -139,7 +134,8 @@ class StickyActionEnv(gym.Wrapper):
 class RepeatActionEnv(gym.Wrapper):
     def __init__(self, env):
         gym.Wrapper.__init__(self, env)
-        self.successive_frame = np.zeros((2,) + self.env.observation_space.shape, dtype=np.uint8)
+        self.successive_frame = np.zeros(
+            (2,) + self.env.observation_space.shape, dtype=np.uint8)
 
     def reset(self, **kwargs):
         return self.env.reset(**kwargs)
