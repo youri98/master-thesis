@@ -1,5 +1,3 @@
-from ale_py import ALEInterface
-from ale_py.roms import Breakout, MontezumaRevenge
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import typing
@@ -11,8 +9,6 @@ import os
 import gym
 from copy import deepcopy
 from torch._six import inf
-from ale_py import ALEInterface
-from ale_py.roms import Breakout, MontezumaRevenge
 import shutil
 
 def conv_shape(input_dims, kernel_size, stride, padding=0):
@@ -20,37 +16,36 @@ def conv_shape(input_dims, kernel_size, stride, padding=0):
             (input_dims[1] + 2 * padding - kernel_size) // stride + 1)
             
 
+# def setup_environment(rom: str) -> ALEInterface:
+#     game_dict = {"MontezumaRevenge": MontezumaRevenge,
+#                  "Breakout": Breakout}
+#     ale = ALEInterface()
+#     ale.loadROM(game_dict[rom])
+#     return ale
 
-def setup_environment(rom: str) -> ALEInterface:
-    game_dict = {"MontezumaRevenge": MontezumaRevenge,
-                 "Breakout": Breakout}
-    ale = ALEInterface()
-    ale.loadROM(game_dict[rom])
-    return ale
-
-def plot_score(total_e_score, total_i_score):
+# def plot_score(total_e_score, total_i_score):
         
-    figure_file = 'plots/score.png'
-    fig = plt.figure(1, figsize=(8, 3))
-    #plt.ylim(ymin=0)
-    plt.yscale('log')
+#     figure_file = 'plots/score.png'
+#     fig = plt.figure(1, figsize=(8, 3))
+#     #plt.ylim(ymin=0)
+#     plt.yscale('log')
 
-    for i, (e_score, i_score) in enumerate(zip(total_e_score, total_i_score)):
-        x = [i+1 for i in range(len(e_score))]
-        plt.plot(x, i_score, color=((i+1)/(len(total_e_score) + 1), 0, 0))
-        plt.plot(x, e_score, color=(0, 0, (i+1)/(len(total_e_score) + 1)))
+#     for i, (e_score, i_score) in enumerate(zip(total_e_score, total_i_score)):
+#         x = [i+1 for i in range(len(e_score))]
+#         plt.plot(x, i_score, color=((i+1)/(len(total_e_score) + 1), 0, 0))
+#         plt.plot(x, e_score, color=(0, 0, (i+1)/(len(total_e_score) + 1)))
 
-    now = datetime.datetime.now()
-    plt.savefig(f"plots/{now.hour}{now.minute}-reward")
+#     now = datetime.datetime.now()
+#     plt.savefig(f"plots/{now.hour}{now.minute}-reward")
 
 
-def plot_learning_curve(x, scores, figure_file):
-    running_avg = np.zeros(len(scores))
-    for i in range(len(running_avg)):
-        running_avg[i] = np.mean(scores[max(0, i-100):(i+1)])
-    plt.plot(x, running_avg)
-    plt.title('Running average of previous 100 scores')
-    plt.savefig(figure_file)
+# def plot_learning_curve(x, scores, figure_file):
+#     running_avg = np.zeros(len(scores))
+#     for i in range(len(running_avg)):
+#         running_avg[i] = np.mean(scores[max(0, i-100):(i+1)])
+#     plt.plot(x, running_avg)
+#     plt.title('Running average of previous 100 scores')
+#     plt.savefig(figure_file)
 
 
 def delete_files():
@@ -70,7 +65,7 @@ def delete_files():
 def mean_of_list(func):
     def function_wrapper(*args, **kwargs):
         lists = func(*args, **kwargs)
-        return [sum(l) / len(l) if l else 0 for l in lists] #+ [explained_variance(lists[-4], lists[-3])] + \
+        return [sum(l) / len(l) if l is not None else 0 for l in lists] #+ [explained_variance(lists[-4], lists[-3])] + \
                #[explained_variance(lists[-2], lists[-1])]
 
     return function_wrapper
@@ -82,15 +77,15 @@ def preprocessing(img):
     return img
 
 
-def stack_states(stacked_frames, state, is_new_episode):
-    frame = preprocessing(state)
+# def stack_states(stacked_frames, state, is_new_episode):
+#     frame = preprocessing(state)
 
-    if is_new_episode:
-        stacked_frames = np.stack([frame for _ in range(4)], axis=0)
-    else:
-        stacked_frames = stacked_frames[1:, ...]
-        stacked_frames = np.concatenate([stacked_frames, np.expand_dims(frame, axis=0)], axis=0)
-    return stacked_frames
+#     if is_new_episode:
+#         stacked_frames = np.stack([frame for _ in range(4)], axis=0)
+#     else:
+#         stacked_frames = stacked_frames[1:, ...]
+#         stacked_frames = np.concatenate([stacked_frames, np.expand_dims(frame, axis=0)], axis=0)
+#     return stacked_frames
 
 
 # Calculates if value function is a good predictor of the returns (ev > 1)

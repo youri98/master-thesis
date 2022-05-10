@@ -28,9 +28,9 @@ def get_params():
     """
     # region default parameters
     default_params = {"env_name": "MontezumaRevengeNoFrameskip-v4",
-                      "state_shape": (4, 84, 84),
+                      "state_shape": (1, 84, 84),
                       "obs_shape": (1, 84, 84),
-                      "total_rollouts_per_env": int(128), #30e3
+                      "total_rollouts_per_env": int(1000), #30e3
                       "max_frames_per_episode": 4500,  # 4500 * 4 = 18K :D
                       "rollout_length": 128,
                       "n_epochs": 4,
@@ -45,7 +45,8 @@ def get_params():
                       "clip_range": 0.1,
                       "pre_normalization_steps": 50,
                       "mode": "train_from_scratch",
-                      "record_local": True
+                      "record_local": False,
+                      "algo": "APE"
                       }
 
     # endregion

@@ -58,7 +58,9 @@ class Logger:
         self.duration += (time.time() - self.start_time)
 
     def log_recording(self, recording, fps=60):
-        wandb.log({"video": wandb.Video(np.array(recording), fps=fps, format='gif')})
+        if recording is not None:
+            recording = np.expand_dims(recording, 1)
+            wandb.log({"video": wandb.Video(np.array(recording), fps=fps, format='gif')})
 
     def save_recording_local(self, recording, fps=60):
         if self.config["record_local"]:
@@ -85,13 +87,12 @@ class Logger:
         self.max_episode_reward = max(self.max_episode_reward, self.episode_ext_reward)
 
     def log_iteration(self, *args):
-        iteration, (pg_losses, ext_value_losses, int_value_losses, rnd_losses, disc_losses, entropies), int_reward, ext_reward, action_prob = args
+        iteration, (pg_losses, ext_value_losses, int_value_losses, rnd_losses, disc_losses, entropies, advs), int_reward, ext_reward, action_prob = args
 
         # self.running_act_prob = self.exp_avg(self.running_act_prob, action_prob)
         # self.running_int_reward = self.exp_avg(self.running_int_reward, int_reward)
         # self.running_training_logs = self.exp_avg(self.running_training_logs, np.array(training_logs))
         wandb.log({
-            "Iteration": iteration,
             "Visited rooms": len(list(self.visited_rooms)),
             "Action Probability": action_prob,
             "Intrinsic Reward": int_reward,
@@ -103,6 +104,7 @@ class Logger:
             "Discriminator Loss": disc_losses,
             "Entropy": entropies,
             "Time": self.duration,
+            "Advantage": advs,
             # "Intrinsic Explained variance": self.running_training_logs[5],
             # "Extrinsic Explained variance": self.running_training_logs[6],
         })
@@ -112,6 +114,7 @@ class Logger:
         torch.save({"current_policy_state_dict": self.brain.current_policy.state_dict(),
                     "predictor_model_state_dict": self.brain.predictor_model.state_dict(),
                     "target_model_state_dict": self.brain.target_model.state_dict(),
+                    "discriminator_model_state_dict": self.brain.discriminator.state_dict(),
                     "optimizer_state_dict": self.brain.optimizer.state_dict(),
                     "state_rms_mean": self.brain.state_rms.mean,
                     "state_rms_var": self.brain.state_rms.var,

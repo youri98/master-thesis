@@ -32,7 +32,7 @@ def train_model(model_name=None, n_to_chkpt=10, model_type="APE"):
     agent = APE(**config) if model_type == "APE" else RND(**config)
     logger = Logger(agent, resume=config["mode"] == "train_from_chkpt", **config)
 
-    workers = [Worker(i, **config) for i in range(config["n_workers"])]
+    workers = [Worker(i, **config) for i in range(config["n_workers"])] 
     
     init_iteration = 0
     episode = 0
@@ -74,6 +74,8 @@ def train_model(model_name=None, n_to_chkpt=10, model_type="APE"):
             total_log_probs = np.zeros(rollout_base_shape)
             next_states = np.zeros((rollout_base_shape[0],) + config["state_shape"], dtype=np.uint8)
             total_next_obs = np.zeros(rollout_base_shape + config["obs_shape"], dtype=np.uint8)
+            total_next_states = np.zeros(rollout_base_shape + config["obs_shape"], dtype=np.uint8)
+
             logger.time_start()
 
             for t in range(config["rollout_length"]):
@@ -94,9 +96,10 @@ def train_model(model_name=None, n_to_chkpt=10, model_type="APE"):
                     total_ext_rewards[worker_id, t] = reward
                     total_dones[worker_id, t] = done
                     next_states[worker_id] = state_
-                    total_next_obs[worker_id, t] = state_[-1, ...]
+                    total_next_states[worker_id, t] = state_
+                    #total_next_obs[worker_id, t] = state_[-1, ...]
 
-                    if worker_id == 0 and config["record_local"]:
+                    if worker_id == 0:
                         recording.append(state_)
 
                 episode_ext_reward += total_ext_rewards[0, t]
@@ -107,16 +110,17 @@ def train_model(model_name=None, n_to_chkpt=10, model_type="APE"):
                         logger.log_episode(episode, episode_ext_reward, visited_rooms)
                     episode_ext_reward = 0
 
-            total_next_obs = concatenate(total_next_obs)
-            total_int_rewards = agent.calculate_int_rewards(total_next_obs)
+            total_next_states = concatenate(total_next_states)
+            total_actions = concatenate(total_actions)
+
+            total_int_rewards = agent.calculate_int_rewards(total_next_states, total_actions)
             _, next_int_values, next_ext_values, * \
-                _ = agent.get_actions_and_values(next_states, batch=True)
+                _ = agent.get_actions_and_values(total_next_states, batch=True)
 
             total_int_rewards = agent.normalize_int_rewards(total_int_rewards)
 
             train_logs = agent.train(states=concatenate(total_states),
-                                                        actions=concatenate(
-                                                            total_actions),
+                                                        actions=total_actions,
                                                         int_rewards=total_int_rewards,
                                                         ext_rewards=total_ext_rewards,
                                                         dones=total_dones,
@@ -126,7 +130,7 @@ def train_model(model_name=None, n_to_chkpt=10, model_type="APE"):
                                                             total_log_probs),
                                                         next_int_values=next_int_values,
                                                         next_ext_values=next_ext_values,
-                                                        total_next_obs=total_next_obs)
+                                                        next_states=total_next_states)
             logger.time_stop()
             logger.log_iteration(iteration,
                                     train_logs,
@@ -134,7 +138,10 @@ def train_model(model_name=None, n_to_chkpt=10, model_type="APE"):
                                     total_ext_rewards[0].mean(),
                                     total_action_probs[0].max(-1).mean(),
                                     )
+            
+            recording = np.stack(recording)
             logger.log_recording(recording)
+            recording = []
 
             if iteration % n_to_chkpt == 0 or iteration == config["total_rollouts_per_env"]:
                 logger.save_params(episode, iteration)
@@ -143,7 +150,7 @@ def train_model(model_name=None, n_to_chkpt=10, model_type="APE"):
 
 if __name__ == '__main__':
     #delete_files()
-    train_model()
-    wandb.finish()
-    train_model(model_type="RND")
+    # train_model()
+    # wandb.finish()
+    train_model(model_type="APE")
     wandb.finish()
