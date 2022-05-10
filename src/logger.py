@@ -38,7 +38,7 @@ class Logger:
 
         if not self.config["do_test"] and self.config["train_from_scratch"]:
             self.create_model_folder()
-            self.log_config_params()
+            
 
         self.exp_avg = lambda x, y: 0.9 * x + 0.1 * y if (y != 0).all() else y
 

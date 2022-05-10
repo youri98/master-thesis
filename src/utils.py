@@ -65,7 +65,7 @@ def delete_files():
 def mean_of_list(func):
     def function_wrapper(*args, **kwargs):
         lists = func(*args, **kwargs)
-        return [sum(l) / len(l) if l is not None else 0 for l in lists] #+ [explained_variance(lists[-4], lists[-3])] + \
+        return [sum(l) / len(l) if len(l) != 0 else 0 for l in lists] #+ [explained_variance(lists[-4], lists[-3])] + \
                #[explained_variance(lists[-2], lists[-1])]
 
     return function_wrapper

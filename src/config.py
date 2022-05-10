@@ -46,7 +46,7 @@ def get_params():
                       "pre_normalization_steps": 50,
                       "mode": "train_from_scratch",
                       "record_local": False,
-                      "algo": "APE"
+                      "algo": "RND"
                       }
 
     # endregion

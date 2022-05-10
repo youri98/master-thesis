@@ -140,7 +140,8 @@ class APE:
                 ext_value_losses.append(ext_value_loss.item())
                 int_value_losses.append(int_value_loss.item())
                 rnd_losses.append(rnd_loss.item())
-                disc_losses.append(disc_loss.item())
+                if self.config["algo"] == "APE":
+                    disc_losses.append(disc_loss.item())
                 entropies.append(entropy.item())
                 # https://github.com/openai/random-network-distillation/blob/f75c0f1efa473d5109d487062fd8ed49ddce6634/ppo_agent.py#L187
 

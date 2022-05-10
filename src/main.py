@@ -10,6 +10,7 @@ from torch.multiprocessing import Process, Pipe
 from runner import Worker
 import torch
 import wandb
+import multiprocessing
 
 
 torch.autograd.set_detect_anomaly(True)
@@ -18,19 +19,21 @@ torch.autograd.set_detect_anomaly(True)
 def run_workers(worker, conn):
     worker.step(conn)
 
-def train_model(model_name=None, n_to_chkpt=10, model_type="APE"):
+def train_model(model_name=None, n_to_chkpt=10):
     recording = []
 
-    config = get_params()
     temp_env = gym.make(config["env_name"])
     config.update({"n_actions": temp_env.action_space.n})
     temp_env.close()
+    
+    config["n_workers"] = multiprocessing.cpu_count()
 
     config.update({"batch_size": (config["rollout_length"] * config["n_workers"]) // config["n_mini_batch"]})
     config.update({"predictor_proportion": 32 / config["n_workers"]})
 
-    agent = APE(**config) if model_type == "APE" else RND(**config)
+    agent = APE(**config)
     logger = Logger(agent, resume=config["mode"] == "train_from_chkpt", **config)
+    logger.log_config_params()
 
     workers = [Worker(i, **config) for i in range(config["n_workers"])] 
     
@@ -152,5 +155,14 @@ if __name__ == '__main__':
     #delete_files()
     # train_model()
     # wandb.finish()
-    train_model(model_type="APE")
+
+    config = get_params()
+
+    # run 1
+    config["total_rollouts_per_env"] = int(1000)
+    config["algo"] = "RND"
+
+    train_model()
     wandb.finish()
+
+
