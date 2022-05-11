@@ -3,7 +3,7 @@ import wandb
 import os
 
 with open("key.txt", "r") as personal_key:
-    os.environ["WANDB_API_KEY"] = personal_key.read()
+    os.environ["WANDB_API_KEY"] = personal_key.read().strip()
 
 def get_params():
     parser = argparse.ArgumentParser(
