@@ -3,4 +3,4 @@ numpy
 wandb
 gym
 tqdm
-cv2
+opencv-python

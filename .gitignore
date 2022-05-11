@@ -103,7 +103,6 @@ celerybeat.pid
 
 # Environments
 .env
-.venv
 env/
 venv/
 ENV/
@@ -146,3 +145,4 @@ todo.txt
 /wandb
 .vscode
 key.txt
+sshkey.txt
