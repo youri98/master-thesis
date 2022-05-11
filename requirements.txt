@@ -1,6 +1,10 @@
-tensorflow
+torch
 numpy
 wandb
-gym
+gym==0.15.7
 tqdm
 opencv-python
+ale-py
+atari-py
+moviepy 
+imageio
