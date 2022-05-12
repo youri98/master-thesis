@@ -1,21 +1,18 @@
-from common.config import get_params
+from config import get_params
 import numpy as np
 from numpy import concatenate
 import gym
 from tqdm import tqdm
-from common.ape import APE
-from common.logger import Logger
+from ape import APE
+from logger import Logger
 from torch.multiprocessing import Process, Pipe
-from common.runner import Worker
+from runner import Worker
 import torch
 import wandb
 import multiprocessing
 import os
 import pickle
 
-import sys, os
-sys.path.append(os.getcwd())
-sys.path.append(os.getcwd() + "/common/")
 
 torch.autograd.set_detect_anomaly(True)
 
