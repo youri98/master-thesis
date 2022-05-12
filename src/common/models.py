@@ -3,7 +3,7 @@ import torch.nn as nn
 from torch.distributions.categorical import Categorical
 from abc import ABC
 from torch.nn import functional as F
-from utils import conv_shape
+from common.utils import conv_shape
 import torch
 
 

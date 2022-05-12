@@ -1,10 +1,9 @@
-from models import PolicyModel, PredictorModel, TargetModel, DiscriminatorModel, DecoderModel
+from common.models import PolicyModel, PredictorModel, TargetModel, DiscriminatorModel, DecoderModel
 import torch
 import numpy as np
 from torch.optim.adam import Adam
-from utils import mean_of_list
-import wandb
-from utils import mean_of_list, RunningMeanStd
+from common.utils import mean_of_list, mean_of_list, RunningMeanStd
+
 
 torch.backends.cudnn.benchmark = True
 

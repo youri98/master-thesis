@@ -10,7 +10,7 @@ import json
 import cv2
 
 class Logger:
-    def __init__(self, brain, resume=False, **config):
+    def __init__(self, brain, **config):
         self.config = config
         self.brain = brain
         self.log_dir = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
@@ -32,14 +32,20 @@ class Logger:
         self.running_last_10_ext_r = 0
         self.best_score = 0
 
-        wandb.init(project="RND", entity="youri", resume=resume)
+        self.run_id = wandb.util.generate_id()
+        wandb.init(project="RND", entity="youri", id=self.run_id, resume="allow")
         wandb.config = self.config
 
-        if not self.config["do_test"] and self.config["train_from_scratch"]:
+
+        if self.config["mode"] == "train_from_scratch":
             self.create_model_folder()
             
 
-        self.exp_avg = lambda x, y: 0.9 * x + 0.1 * y if (y != 0).all() else y
+        #self.exp_avg = lambda x, y: 0.9 * x + 0.1 * y if (y != 0).all() else y
+
+    def reboot(self):
+        wandb.init(project="RND", entity="youri", resume="allow", id=self.run_id)
+        wandb.config = self.config
 
     def create_model_folder(self):
         if not os.path.exists("Models"):
@@ -62,7 +68,7 @@ class Logger:
             wandb.log({"video": wandb.Video(np.array(recording), fps=fps, format='gif')})
 
     def save_recording_local(self, recording, fps=60):
-        if self.config["record_local"]:
+        if self.config["record"]:
             frame_size = (self.config["obs_shape"][2], self.config["obs_shape"][1])
 
             fourcc = cv2.VideoWriter_fourcc(*'mp4v') 

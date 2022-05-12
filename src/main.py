@@ -1,17 +1,17 @@
-from config import get_params
+from common.config import get_params
 import numpy as np
 from numpy import concatenate
 import gym
 from tqdm import tqdm
-from rnd import RND
-from ape import APE
-from logger import Logger
+from common.ape import APE
+from common.logger import Logger
 from torch.multiprocessing import Process, Pipe
-from runner import Worker
+from common.runner import Worker
 import torch
 import wandb
 import multiprocessing
-
+import os
+import pickle
 
 torch.autograd.set_detect_anomaly(True)
 
@@ -19,7 +19,11 @@ torch.autograd.set_detect_anomaly(True)
 def run_workers(worker, conn):
     worker.step(conn)
 
-def train_model(model_name=None, n_to_chkpt=10):
+def train_model():
+    with open("key.txt", "r") as personal_key:
+        if personal_key is not None:
+            os.environ["WANDB_API_KEY"] = personal_key.read().strip()
+
     recording = []
 
     temp_env = gym.make(config["env_name"])
@@ -32,8 +36,14 @@ def train_model(model_name=None, n_to_chkpt=10):
     config.update({"predictor_proportion": 32 / config["n_workers"]})
 
     agent = APE(**config)
-    logger = Logger(agent, resume=config["mode"] == "train_from_chkpt", **config)
-    logger.log_config_params()
+
+    if config["mode"] == "train_from_chkpt":
+        with open("Models/" + config["model_name"] + "/logger.obj", "rb") as file_pi:
+            logger = pickle.load(file_pi)
+            logger.reboot()
+    else:        
+        logger = Logger(agent, **config)
+        logger.log_config_params()
 
     workers = [Worker(i, **config) for i in range(config["n_workers"])] 
     
@@ -42,6 +52,12 @@ def train_model(model_name=None, n_to_chkpt=10):
     visited_rooms = set([1])
     workers = [Worker(i, **config) for i in range(config["n_workers"])]
     episode_ext_reward = 0
+
+    if not config["verbose"]:
+        os.environ["WANDB_SILENT"] = "true"   
+    else:
+        print("params:", config)
+
 
     parents = []
     for worker in workers:
@@ -52,9 +68,9 @@ def train_model(model_name=None, n_to_chkpt=10):
         p.start()
         
     if config["mode"] == "test" or config["mode"] == "train_from_chkpt":
-        if model_name is not None:
-            logger.log_dir = model_name
-        chkpt = logger.load_weights(model_name)
+        if config["model_name"] is not None:
+            logger.log_dir = config["model_name"] 
+        chkpt = logger.load_weights(config["model_name"])
         agent.set_from_checkpoint(chkpt)
         init_iteration = chkpt["iteration"]
         episode = chkpt["episode"]
@@ -65,7 +81,7 @@ def train_model(model_name=None, n_to_chkpt=10):
     else:
         rollout_base_shape = config["n_workers"], config["rollout_length"]
 
-        for iteration in tqdm(range(init_iteration, config["total_rollouts_per_env"])):
+        for iteration in tqdm(range(init_iteration, config["total_rollouts"]), disable=not config["verbose"]):
             total_states = np.zeros(rollout_base_shape + config["state_shape"], dtype=np.uint8)
             total_actions = np.zeros(rollout_base_shape, dtype=np.uint8)
             total_action_probs = np.zeros(rollout_base_shape + (config["n_actions"],))
@@ -146,10 +162,13 @@ def train_model(model_name=None, n_to_chkpt=10):
             logger.log_recording(recording)
             recording = []
 
-            if iteration % n_to_chkpt == 0 or iteration == config["total_rollouts_per_env"]:
+            if iteration % config["interval"] == 0 or iteration == config["total_rollouts"]:
                 logger.save_params(episode, iteration)
                 logger.save_recording_local(recording)
                 logger.time_stop()
+
+                with open("Models/" + logger.log_dir + "/logger.obj", "wb") as file_pi:
+                    pickle.dump(logger, file_pi)
 
 if __name__ == '__main__':
     #delete_files()
@@ -159,8 +178,9 @@ if __name__ == '__main__':
     config = get_params()
 
     # run 1
-    config["total_rollouts_per_env"] = int(1000)
+    config["total_rollouts"] = int(10)
     config["algo"] = "RND"
+    config["verbose"] = True
 
     train_model()
     wandb.finish()
