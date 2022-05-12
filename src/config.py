@@ -11,7 +11,7 @@ def get_params():
                              " counted by iterations.")
     parser.add_argument("--algo", default="RND", help="Use RND or APE", choices=["RND", "APE"])
     parser.add_argument("--record", default=False, action="store_true", help="Save recording in model folder")
-    parser.add_argument("--total_rollouts", default=1e1, type=int, help="Total number of rollouts per environment")
+    parser.add_argument("--total_rollouts", default=int(1e1), type=int, help="Total number of rollouts per environment")
     parser.add_argument("--env", default="MontezumaRevengeNoFrameskip-v4", help="Name of the environment to run the model on")
     parser.add_argument("--mode", default="train_from_scratch", help="whether to train or test", choices=["train_from_scratch", "train_from_chkpt", "test"])
     parser.add_argument("--verbose", default=False, action="store_true")

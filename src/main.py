@@ -73,7 +73,7 @@ def train_model(config):
             logger.log_dir = config["model_name"] 
         chkpt = logger.load_weights(config["model_name"])
         agent.set_from_checkpoint(chkpt)
-        init_iteration = chkpt["iteration"]
+        init_iteration = int(chkpt["iteration"])
         episode = chkpt["episode"]
 
     if config["mode"] == "test":
@@ -179,7 +179,7 @@ if __name__ == '__main__':
     config = get_params()
 
     # run 1
-    config["total_rollouts"] = int(10)
+    #config["total_rollouts"] = int(10)
     config["algo"] = "RND"
     config["verbose"] = True
 
