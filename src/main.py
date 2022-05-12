@@ -20,7 +20,7 @@ torch.autograd.set_detect_anomaly(True)
 def run_workers(worker, conn):
     worker.step(conn)
 
-def train_model():
+def train_model(config):
     with open("key.txt", "r") as personal_key:
         if personal_key is not None:
             os.environ["WANDB_API_KEY"] = personal_key.read().strip()
@@ -183,7 +183,7 @@ if __name__ == '__main__':
     config["algo"] = "RND"
     config["verbose"] = True
 
-    train_model()
+    train_model(config)
     wandb.finish()
 
 

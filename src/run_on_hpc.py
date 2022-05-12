@@ -22,5 +22,5 @@ if __name__ == '__main__':
     config["algo"] = "RND"
     config["n_workers"] = 16
 
-    train_model()
+    train_model(config)
     wandb.finish()
