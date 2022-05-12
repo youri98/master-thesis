@@ -13,6 +13,10 @@ import multiprocessing
 import os
 import pickle
 
+import sys, os
+sys.path.append(os.getcwd())
+sys.path.append(os.getcwd() + "/common")
+
 torch.autograd.set_detect_anomaly(True)
 
 
