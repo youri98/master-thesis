@@ -9,6 +9,8 @@
 
 import sys, os
 sys.path.append(os.getcwd())
+sys.path.append(os.getcwd() + "/common")
+
 from common.config import get_params
 from main import train_model
 import wandb

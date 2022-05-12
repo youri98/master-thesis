@@ -149,3 +149,4 @@ key.txt
 sshkey.txt
 src/Models/
 src/wandb
+.token.txt
