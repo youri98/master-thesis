@@ -1,4 +1,4 @@
-from common.utils import *
+from utils import *
 
 class Worker:
     def __init__(self, id, **config):
