@@ -5,7 +5,7 @@
 #SBATCH --ntasks=16
 #SBATCH --error=slurm-%j.err
 #SBATCH --time=2:00:00
-
+#SBATCH --gres
 
 import sys, os
 sys.path.append(os.getcwd())
@@ -18,7 +18,7 @@ if __name__ == '__main__':
     config = get_params()
 
     # run 1
-    config["total_rollouts_per_env"] = int(1000)
+    config["total_rollouts"] = int(1000)
     config["algo"] = "RND"
     config["n_workers"] = 16
 
