@@ -150,15 +150,11 @@ class DiscriminatorModel(nn.Module, ABC):
         self.hidden_layers = hidden_layers
         self.n_layers = n_layers
         self.n_actions = n_actions
+        self.device =  torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
-
-        self.lstm1 = nn.LSTMCell(encoding_size + n_actions, self.hidden_layers)
-        self.lstm2 = nn.LSTMCell(self.hidden_layers, self.hidden_layers)
-        self.lstm3 = nn.LSTMCell(self.hidden_layers, self.hidden_layers)
-
-        self.rnn = nn.LSTM(encoding_size + n_actions, self.hidden_layers, self.n_layers)
-        self.h0 = torch.randn((self.n_layers, self.timesteps, self.hidden_layers), dtype=torch.float32)
-        self.c0 = torch.randn((self.n_layers, self.timesteps, self.hidden_layers), dtype=torch.float32)
+        self.rnn = nn.LSTM(encoding_size + n_actions, self.hidden_layers, self.n_layers).to(self.device)
+        self.h0 = torch.randn((self.n_layers, self.timesteps, self.hidden_layers), dtype=torch.float32).to(self.device)
+        self.c0 = torch.randn((self.n_layers, self.timesteps, self.hidden_layers), dtype=torch.float32).to(self.device)
 
 
         self.fc = nn.Sequential(
@@ -166,7 +162,7 @@ class DiscriminatorModel(nn.Module, ABC):
             nn.ReLU(),
             nn.Linear(256, pred_size),
             nn.Sigmoid()
-        )
+        ).to(self.device)
 
     def forward(self, rand_encoding, actions, true_encoding, future_preds=0):
         input_t = torch.cat((rand_encoding, actions), dim=-1)
