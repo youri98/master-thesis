@@ -9,5 +9,6 @@
 
 module load python/3
 module load cuda10.2/toolkit/10.2.89
+module load mpi
 
 python getinfo.py

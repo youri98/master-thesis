@@ -5,11 +5,14 @@ from torch.optim.adam import Adam
 from utils import mean_of_list, mean_of_list, RunningMeanStd
 from runner import Worker
 from torch.multiprocessing import Process, Pipe
+from torch.utils.data import DataLoader
+from torch.nn import DataParallel
+from torch.nn.parallel import DistributedDataParallel
 
 torch.backends.cudnn.benchmark = True
 
 class APE:
-    def __init__(self, timesteps=8, use_decoder=False, encoding_size=512, multiple_feature_pred=False, **config):
+    def __init__(self, timesteps=8, use_decoder=False, encoding_size=512, multiple_feature_pred=False, run_from_hpc=False, **config):
 
         self.config = config
         self.mini_batch_size = self.config["batch_size"]
@@ -27,6 +30,13 @@ class APE:
         self.current_policy = PolicyModel(self.config["state_shape"], self.config["n_actions"]).to(self.device)
         self.predictor_model = PredictorModel(self.obs_shape, self.encoding_size).to(self.device)
         self.target_model = TargetModel(self.obs_shape, self.encoding_size).to(self.device)
+
+
+        if run_from_hpc:
+            self.current_policy = DistributedDataParallel(self.current_policy)
+            self.predictor_model = DistributedDataParallel(self.predictor_model)
+            self.target_model = DistributedDataParallel(self.target_model)
+            self.discriminator = DistributedDataParallel(self.discriminator)
 
         for param in self.target_model.parameters():
             param.requires_grad = False
@@ -51,14 +61,14 @@ class APE:
         for param in self.target_model.parameters():
             param.requires_grad = False
         
-        self.workers = [Worker(i, **config) for i in range(config["n_workers"])] 
-        self.parents = []
-        for worker in self.workers:
-            parent_conn, child_conn = Pipe()
-            p = Process(target=self.run_workers_train, args=(worker, child_conn,))
-            p.daemon = True
-            self.parents.append(parent_conn)
-            p.start()
+        # self.workers = [Worker(i, **config) for i in range(config["n_workers"])] 
+        # self.parents = []
+        # for worker in self.workers:
+        #     parent_conn, child_conn = Pipe()
+        #     p = Process(target=self.run_workers_train, args=(worker, child_conn,))
+        #     p.daemon = True
+        #     self.parents.append(parent_conn)
+        #     p.start()
 
 
 
@@ -150,14 +160,23 @@ class APE:
 
         changes_in_states = ((next_states - self.state_rms.mean) / (self.state_rms.var ** 0.5)).clip(-5, 5)
 
-
-        states = torch.ByteTensor(states).to(self.device)
-        next_states = torch.Tensor(next_states).to(self.device)
-        actions = torch.ByteTensor(actions).to(torch.int64).to(self.device)
-        log_probs = torch.Tensor(log_probs).to(self.device)
-        advs = torch.Tensor(advs).to(self.device)
-        int_rets = torch.Tensor(int_rets).to(self.device)
-        ext_rets = torch.Tensor(ext_rets).to(self.device)
+        if self.device == torch.device("cuda"):
+            # optimised for 16-bit computing on gpus such as v100 and 20180ti, but not supported for cpu
+            states = torch.Tensor(states).to(torch.float16).to(self.device)
+            next_states = torch.Tensor(next_states).to(torch.float16).to(self.device)
+            actions = torch.Tensor(actions).to(torch.int64).to(self.device)
+            log_probs = torch.Tensor(log_probs).to(torch.float16).to(self.device)
+            advs = torch.Tensor(advs).to(torch.float16).to(self.device)
+            int_rets = torch.Tensor(int_rets).to(torch.float16).to(self.device)
+            ext_rets = torch.Tensor(ext_rets).to(torch.float16).to(self.device)
+        else:
+            states = torch.Tensor(states).to(self.device)
+            next_states = torch.Tensor(next_states).to(self.device)
+            actions = torch.Tensor(actions).to(torch.int64).to(self.device)
+            log_probs = torch.Tensor(log_probs).to(self.device)
+            advs = torch.Tensor(advs).to(self.device)
+            int_rets = torch.Tensor(int_rets).to(self.device)
+            ext_rets = torch.Tensor(ext_rets).to(self.device)
 
 
 

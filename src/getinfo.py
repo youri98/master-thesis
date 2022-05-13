@@ -15,6 +15,7 @@ def getSystemInfo():
     info['ram']=str(round(psutil.virtual_memory().total / (1024.0 **3)))+" GB"
     info['n cores'] = multiprocessing.cpu_count()
     info['gpu'] = torch.cuda.is_available()
+    info["n gpus"] = torch.cuda.device_count()
 
     return json.dumps(info)
 

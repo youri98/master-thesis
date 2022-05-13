@@ -20,9 +20,7 @@ torch.autograd.set_detect_anomaly(True)
 def run_workers_env_step(worker, conn):
     worker.env_step(conn)
 
-
-
-def train_model(config):
+def train_model(config, **kwargs):
     with open("key.txt", "r") as personal_key:
         if personal_key is not None:
             os.environ["WANDB_API_KEY"] = personal_key.read().strip()
@@ -35,7 +33,7 @@ def train_model(config):
     config.update({"predictor_proportion": 32 / config["n_workers"]})
     workers = [Worker(i, **config) for i in range(config["n_workers"])] 
 
-    agent = APE(**config)
+    agent = APE(**kwargs, **config)
 
     if config["mode"] == "train_from_chkpt":
         with open("Models/" + config["model_name"] + "/logger.obj", "rb") as file_pi:

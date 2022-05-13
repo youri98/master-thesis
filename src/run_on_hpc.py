@@ -13,14 +13,18 @@ sys.path.append(os.getcwd())
 from config import get_params
 from main import train_model
 import wandb
+import torch
+
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+torch.distributed.init_process_group("mpi")
 
 if __name__ == '__main__':
     config = get_params()
 
     # run 1
-    config["total_rollouts"] = int(1000)
+    config["total_rollouts"] = int(50)
     config["algo"] = "RND"
     config["n_workers"] = 16
 
-    train_model(config)
+    train_model(config, run_from_hpc=True)
     wandb.finish()
