@@ -5,7 +5,7 @@ from abc import ABC
 from torch.nn import functional as F
 from utils import conv_shape
 import torch
-
+from torch import autocast
 
 class PolicyModel(nn.Module, ABC):
     def __init__(self, state_shape, n_actions):
@@ -102,6 +102,7 @@ class TargetModel(nn.Module, ABC):
                 nn.init.orthogonal_(layer.weight, gain=np.sqrt(2))
                 layer.bias.data.zero_()
 
+    # @autocast(device_type="cpu")
     def forward(self, state):
         return self.seq(state)
 
@@ -138,12 +139,13 @@ class PredictorModel(nn.Module, ABC):
             if isinstance(layer, nn.Conv2d) or isinstance(layer, nn.Linear):
                 nn.init.orthogonal_(layer.weight, gain=np.sqrt(2))
                 layer.bias.data.zero_()
-
+    
+    #@autocast(device_type="cpu")
     def forward(self, state):
         return self.seq(state)
 
 class DiscriminatorModel(nn.Module, ABC):
-    def __init__(self, encoding_size, hidden_layers=128, timesteps=16, n_layers=3, pred_size=1, n_actions=18):
+    def __init__(self, encoding_size, hidden_layers=128, timesteps=8, n_layers=3, pred_size=1, n_actions=18):
         super(DiscriminatorModel, self).__init__()
 
         self.timesteps = timesteps
@@ -164,7 +166,8 @@ class DiscriminatorModel(nn.Module, ABC):
             nn.Sigmoid()
         ).to(self.device)
 
-    def forward(self, rand_encoding, actions, true_encoding, future_preds=0):
+    #@autocast(device_type="cpu")
+    def forward(self, rand_encoding, actions, true_encoding):
         input_t = torch.cat((rand_encoding, actions), dim=-1)
         true_input_t = torch.cat((true_encoding, actions), dim=-1)
 
@@ -179,27 +182,27 @@ class DiscriminatorModel(nn.Module, ABC):
 
 
 
-class DecoderModel(nn.Module, ABC):
-    def __init__(self, encoding_shape=512, state_shape=(84,84,1)):
-        super(DecoderModel, self).__init__()
-        self.state_shape = state_shape
+# class DecoderModel(nn.Module, ABC):
+#     def __init__(self, encoding_shape=512, state_shape=(84,84,1)):
+#         super(DecoderModel, self).__init__()
+#         self.state_shape = state_shape
 
-        self.seq = nn.Sequential(
-            nn.Linear(encoding_shape, 512),
-            nn.ReLU(),
-            nn.Linear(512, 512),
-            nn.ReLU(),
-            nn.Linear(512, 512),
-            nn.ReLU(),
-            nn.Linear(512, 84*84),
-            nn.Sigmoid()
-        )
-        for layer in self.seq.children():
-            if isinstance(layer, nn.Conv2d) or isinstance(layer, nn.Linear):
-                nn.init.orthogonal_(layer.weight, gain=np.sqrt(2))
-                layer.bias.data.zero_()
+#         self.seq = nn.Sequential(
+#             nn.Linear(encoding_shape, 512),
+#             nn.ReLU(),
+#             nn.Linear(512, 512),
+#             nn.ReLU(),
+#             nn.Linear(512, 512),
+#             nn.ReLU(),
+#             nn.Linear(512, 84*84),
+#             nn.Sigmoid()
+#         )
+#         for layer in self.seq.children():
+#             if isinstance(layer, nn.Conv2d) or isinstance(layer, nn.Linear):
+#                 nn.init.orthogonal_(layer.weight, gain=np.sqrt(2))
+#                 layer.bias.data.zero_()
 
-    def forward(self, encoding):
-        reconstructed = self.seq(encoding)
-        reconstructed = reconstructed.view(-1, *self.state_shape)
-        return reconstructed
+#     def forward(self, encoding):
+#         reconstructed = self.seq(encoding)
+#         reconstructed = reconstructed.view(-1, *self.state_shape)
+#         return reconstructed

@@ -4,7 +4,7 @@ import os
 import gym
 from copy import deepcopy
 import shutil
-
+import torch
 
 def conv_shape(input_dims, kernel_size, stride, padding=0):
     return ((input_dims[0] + 2 * padding - kernel_size) // stride + 1,
@@ -205,6 +205,10 @@ class RunningMeanStd:
         self.count = epsilon
 
     def update(self, x):
+        # annoying conjugate, because tensor bfloat16 is not supported by numpy
+        if isinstance(x[0][0], torch.Tensor):
+            x = np.array([i[0] for i in x]).astype(float)
+            
         batch_mean = np.mean(x, axis=0)
         batch_var = np.var(x, axis=0)
         batch_count = x.shape[0]

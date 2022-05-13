@@ -171,16 +171,12 @@ def train_model(config, **kwargs):
 
 if __name__ == '__main__':
     #delete_files()
-    # train_model()
-    # wandb.finish()
-
     config = get_params()
 
     # run 1
-    config["total_rollouts"] = int(100)
+    config["total_rollouts"] = int(10)
     config["algo"] = "RND"
     config["verbose"] = True
-    #config["interval"] = 1
 
     train_model(config)
     wandb.finish()

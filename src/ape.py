@@ -1,4 +1,4 @@
-from models import PolicyModel, PredictorModel, TargetModel, DiscriminatorModel, DecoderModel
+from models import PolicyModel, PredictorModel, TargetModel, DiscriminatorModel
 import torch
 import numpy as np
 from torch.optim.adam import Adam
@@ -60,25 +60,6 @@ class APE:
 
         for param in self.target_model.parameters():
             param.requires_grad = False
-        
-        # self.workers = [Worker(i, **config) for i in range(config["n_workers"])] 
-        # self.parents = []
-        # for worker in self.workers:
-        #     parent_conn, child_conn = Pipe()
-        #     p = Process(target=self.run_workers_train, args=(worker, child_conn,))
-        #     p.daemon = True
-        #     self.parents.append(parent_conn)
-        #     p.start()
-
-
-
-
-
-        # for worker_id, parent in enumerate(parents):
-        #     total_states[worker_id, t] = parent.recv()
-
-        # for parent, a in zip(parents, total_actions[:, t]):
-        #     parent.send(a)
 
 
     def run_workers_train(worker, conn):
@@ -169,8 +150,6 @@ class APE:
         int_rets = torch.Tensor(int_rets).to(self.device)
         ext_rets = torch.Tensor(ext_rets).to(self.device)
 
-
-
         pg_losses, ext_value_losses, int_value_losses, rnd_losses, disc_losses, entropies = [], [], [], [], [], []
         for epoch in range(self.config["n_epochs"]):
             for state, next_state, action, log_prob, adv, int_ret, ext_ret in self.generate_batches(states, next_states, actions, log_probs, advs, int_rets, ext_rets):
@@ -185,13 +164,10 @@ class APE:
 
                 critic_loss = 0.5 * (int_value_loss + ext_value_loss)
 
-                # TODO: this is basically batch size 1, with a rollout length of 16 each time
-                # so split on rollout size and multiprocess that and sum the individual losses as batch loss
                 if self.config["algo"] == "APE":
                     action = torch.nn.functional.one_hot(action, num_classes=self.n_actions)
                     action = action.view(-1, self.timesteps, self.n_actions)
                 disc_loss, rnd_loss = self.calculate_loss(next_state, action)
-
 
                 total_loss = critic_loss + pg_loss - self.config["ent_coeff"] * entropy + rnd_loss + disc_loss
 
@@ -226,12 +202,9 @@ class APE:
         if self.config["algo"] == "RND":
             rnd_loss = (predictor_encoded_features - target_encoded_features).pow(2).mean(-1)
             if not batch:
-                return rnd_loss.detach().cpu().numpy()
+                return rnd_loss.detach()
             else:
-                return rnd_loss.detach().cpu().numpy().reshape((self.config["n_workers"], self.config["rollout_length"]))
-
-        #mask = from_numpy(np.random.choice([0,1], size=(len(target_encoded_features)//self.timesteps, self.pred_size), p=[0.5, 0.5]))
-
+                return rnd_loss.detach().reshape((self.config["n_workers"], self.config["rollout_length"]))
 
 
         mask = torch.randint(0, 2, size=(*predictor_encoded_features.shape[:-1], self.pred_size)).to(self.device)
@@ -243,7 +216,6 @@ class APE:
         features = temp_p + temp_t
 
         disc_preds = self.discriminator(features, actions, target_encoded_features)
-        #disc_preds = torch.kron(disc_preds, torch.ones(self.timesteps)).view(len(target_encoded_features), -1)
         disc_loss = self.f1_loss(disc_preds[:, 0], mask[:, 0]) if self.multiple_feature_pred else self.f1_loss(disc_preds, mask)
 
         if not batch:
@@ -257,7 +229,6 @@ class APE:
 
         predictor_encoded_features = predictor_encoded_features.view(-1, self.timesteps, self.encoding_size)
         target_encoded_features = target_encoded_features.view(-1, self.timesteps, self.encoding_size)
-
         # reconstructed_img = self.decoder(target_encoded_features)
 
         rnd_loss = (predictor_encoded_features - target_encoded_features).pow(2).mean(-1)
@@ -269,16 +240,13 @@ class APE:
             return 0, rnd_loss
 
         mask = torch.randint(0, 2, size=(*predictor_encoded_features.shape[:-1], self.pred_size)).to(self.device)
-        #mask = torch.kron(mask, torch.ones(self.timesteps, dtype=torch.uint8))
         mask_inv = torch.where((mask==0)|(mask==1), mask^1, mask).to(self.device)
             
-        #mask = from_numpy(np.random.choice([0,1], size=(len(target_encoded_features)//self.timesteps, self.pred_size), p=[0.5, 0.5]))
         temp_p = predictor_encoded_features*mask_inv
         temp_t = target_encoded_features*mask
         features = temp_p + temp_t
 
         disc_preds = self.discriminator(features, action, target_encoded_features)
-        #disc_preds = torch.kron(disc_preds, torch.ones(self.timesteps)).view(len(target_encoded_features), -1)
         disc_loss = torch.mean(self.f1_loss(disc_preds, mask))
 
         return disc_loss, rnd_loss
@@ -309,6 +277,9 @@ class APE:
     def normalize_int_rewards(self, intrinsic_rewards):
         # OpenAI's usage of Forward filter is definitely wrong;
         # Because: https://github.com/openai/random-network-distillation/issues/16#issuecomment-488387659
+        if isinstance(intrinsic_rewards, torch.Tensor):
+            intrinsic_rewards = intrinsic_rewards.to(torch.float32)
+
         gamma = self.config["int_gamma"]  # Make code faster.
         intrinsic_returns = [[] for _ in range(self.config["n_workers"])]
         for worker in range(self.config["n_workers"]):
