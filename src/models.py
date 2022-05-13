@@ -168,49 +168,17 @@ class DiscriminatorModel(nn.Module, ABC):
             nn.Sigmoid()
         )
 
-        self.h_t = torch.randn(self.timesteps, self.hidden_layers, dtype=torch.float32)
-        self.c_t = torch.randn(self.timesteps, self.hidden_layers, dtype=torch.float32)
-        self.h_t2 = torch.randn(self.timesteps, self.hidden_layers, dtype=torch.float32)
-        self.c_t2 = torch.randn(self.timesteps, self.hidden_layers, dtype=torch.float32)
-        self.h_t3 = torch.randn(self.timesteps, self.hidden_layers, dtype=torch.float32)
-        self.c_t3 = torch.randn(self.timesteps, self.hidden_layers, dtype=torch.float32)
-
     def forward(self, rand_encoding, actions, true_encoding, future_preds=0):
-        outputs, n_samples = [], rand_encoding.size(0)
-        actions = actions.to(torch.int64)
-        actions = torch.nn.functional.one_hot(actions, num_classes=self.n_actions)
+        input_t = torch.cat((rand_encoding, actions), dim=-1)
+        true_input_t = torch.cat((true_encoding, actions), dim=-1)
 
-        h_t, c_t = self.h_t, self.c_t
-        h_t2, c_t2 = self.h_t2, self.c_t2
-        h_t3, c_t3 = self.h_t3, self.c_t3
+        output, (h_n, c_n) = self.rnn(input_t, (self.h0, self.c0))
+        output = self.fc(output)
 
-        for action_t, input_t, true_input_t in zip(torch.split(actions, self.timesteps, dim=0), torch.split(rand_encoding, self.timesteps, dim=0), torch.split(true_encoding, self.timesteps, dim=0)):
-            #h_t, c_t = self.lstm1(input_t, (self.h_t, self.c_t)) 
-            #h_t2, c_t2 = self.lstm2(h_t, (self.h_t2, self.c_t2)) 
-            #h_t3, c_t3 = self.lstm3(h_t2, (self.h_t3, self.c_t3)) # new hidden and cell states
+        with torch.no_grad():
+            _, (self.h0, self.c0) = self.rnn(true_input_t, (self.h0, self.c0))
 
-            action_t = torch.unsqueeze(action_t, dim=0)
-
-            input_t = torch.unsqueeze(input_t, dim=0)
-            input_t = torch.cat((input_t, action_t), dim=-1)
-
-            true_input_t = torch.unsqueeze(true_input_t, dim=0)
-            true_input_t = torch.cat((true_input_t, action_t), dim=-1)
-
-            output, (h_n, c_n) = self.rnn(input_t, (self.h0, self.c0))
-            output = torch.squeeze(output)
-
-            output = self.fc(output)
-            outputs.append(output)
-
-            with torch.no_grad():
-                #self.h_t, self.c_t = self.lstm1(true_input_t,(self.h_t, self.c_t))
-                #self.h_t2, self.c_t2 = self.lstm2(self.h_t,(self.h_t2, self.c_t2))
-                #self.h_t3, self.c_t3 = self.lstm3(self.h_t2,(self.h_t3, self.c_t3))
-                output, (self.h0, self.c0) = self.rnn(true_input_t, (self.h0, self.c0))
-
-        outputs = torch.cat(outputs)
-        return outputs
+        return output
 
 
 

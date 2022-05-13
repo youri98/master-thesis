@@ -21,7 +21,7 @@ class Worker:
         obs = self.env.reset()
         self.state = preprocessing(obs)
 
-    def step(self, conn):
+    def env_step(self, conn):
         t = 1
         while True:
             conn.send(self.state)

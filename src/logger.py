@@ -31,6 +31,7 @@ class Logger:
         # It is not correct but does not matter.
         self.running_last_10_ext_r = 0
         self.best_score = 0
+        self.timer = {}
 
         self.run_id = wandb.util.generate_id()
         wandb.init(project="RND", entity="youri", id=self.run_id, resume="allow")
@@ -59,8 +60,8 @@ class Logger:
     def time_start(self):
         self.start_time = time.time()
 
-    def time_stop(self):
-        self.duration += (time.time() - self.start_time)
+    def time_stop(self, kind="training time"):
+        self.timer[kind] = self.timer[kind] + (time.time() - self.start_time) if kind in self.timer else (time.time() - self.start_time)
 
     def log_recording(self, recording, fps=60):
         if recording is not None:
@@ -97,7 +98,7 @@ class Logger:
         # self.running_act_prob = self.exp_avg(self.running_act_prob, action_prob)
         # self.running_int_reward = self.exp_avg(self.running_int_reward, int_reward)
         # self.running_training_logs = self.exp_avg(self.running_training_logs, np.array(training_logs))
-        wandb.log({
+        params = {
             "Visited rooms": len(list(self.visited_rooms)),
             "Action Probability": action_prob,
             "Intrinsic Reward": int_reward,
@@ -108,11 +109,12 @@ class Logger:
             "RND Loss": rnd_losses,
             "Discriminator Loss": disc_losses,
             "Entropy": entropies,
-            "Time": self.duration,
             "Advantage": advs,
             # "Intrinsic Explained variance": self.running_training_logs[5],
             # "Extrinsic Explained variance": self.running_training_logs[6],
-        })
+        }
+        params.update(self.timer)
+        wandb.log(params)
 
 
     def save_params(self, episode, iteration):
