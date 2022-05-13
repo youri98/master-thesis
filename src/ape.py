@@ -234,9 +234,9 @@ class APE:
 
 
 
-        mask = torch.randint(0, 2, size=(*predictor_encoded_features.shape[:-1], self.pred_size))
+        mask = torch.randint(0, 2, size=(*predictor_encoded_features.shape[:-1], self.pred_size)).to(self.device)
         #mask = torch.kron(mask, torch.ones(self.timesteps, dtype=torch.uint8))
-        mask_inv = torch.where((mask==0)|(mask==1), mask^1, mask)
+        mask_inv = torch.where((mask==0)|(mask==1), mask^1, mask).to(self.device)
 
         temp_p = predictor_encoded_features*mask_inv
         temp_t = target_encoded_features*mask
@@ -261,16 +261,16 @@ class APE:
         # reconstructed_img = self.decoder(target_encoded_features)
 
         rnd_loss = (predictor_encoded_features - target_encoded_features).pow(2).mean(-1)
-        mask = torch.rand(rnd_loss.size(), device=self.device)
+        mask = torch.rand(rnd_loss.size(), device=self.device).to(self.device)
         mask = (mask < self.config["predictor_proportion"]).float()
         rnd_loss = (mask * rnd_loss).sum() / torch.max(mask.sum(), torch.Tensor([1]).to(self.device))
 
         if self.config["algo"] == "RND":
             return 0, rnd_loss
 
-        mask = torch.randint(0, 2, size=(*predictor_encoded_features.shape[:-1], self.pred_size))
+        mask = torch.randint(0, 2, size=(*predictor_encoded_features.shape[:-1], self.pred_size)).to(self.device)
         #mask = torch.kron(mask, torch.ones(self.timesteps, dtype=torch.uint8))
-        mask_inv = torch.where((mask==0)|(mask==1), mask^1, mask)
+        mask_inv = torch.where((mask==0)|(mask==1), mask^1, mask).to(self.device)
             
         #mask = from_numpy(np.random.choice([0,1], size=(len(target_encoded_features)//self.timesteps, self.pred_size), p=[0.5, 0.5]))
         temp_p = predictor_encoded_features*mask_inv
