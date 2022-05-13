@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-#SBATCH --partition=mcs.default.q
+#SBATCH --partition=mcs.gpu.q
 #SBATCH --output=openme.out
 #SBATCH --nodes=1
 #SBATCH --ntasks=16
@@ -23,8 +23,7 @@ if __name__ == '__main__':
 
     # run 1
     config["total_rollouts"] = int(50)
-    config["algo"] = "RND"
     config["n_workers"] = 16
 
-    train_model(config, run_from_hpc=True)
+    train_model(config, run_from_hpc=False)
     wandb.finish()
