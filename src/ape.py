@@ -160,23 +160,14 @@ class APE:
 
         changes_in_states = ((next_states - self.state_rms.mean) / (self.state_rms.var ** 0.5)).clip(-5, 5)
 
-        if self.device == torch.device("cuda"):
-            # optimised for 16-bit computing on gpus such as v100 and 20180ti, but not supported for cpu
-            states = torch.Tensor(states).to(torch.float16).to(self.device)
-            next_states = torch.Tensor(next_states).to(torch.float16).to(self.device)
-            actions = torch.Tensor(actions).to(torch.int64).to(self.device)
-            log_probs = torch.Tensor(log_probs).to(torch.float16).to(self.device)
-            advs = torch.Tensor(advs).to(torch.float16).to(self.device)
-            int_rets = torch.Tensor(int_rets).to(torch.float16).to(self.device)
-            ext_rets = torch.Tensor(ext_rets).to(torch.float16).to(self.device)
-        else:
-            states = torch.Tensor(states).to(self.device)
-            next_states = torch.Tensor(next_states).to(self.device)
-            actions = torch.Tensor(actions).to(torch.int64).to(self.device)
-            log_probs = torch.Tensor(log_probs).to(self.device)
-            advs = torch.Tensor(advs).to(self.device)
-            int_rets = torch.Tensor(int_rets).to(self.device)
-            ext_rets = torch.Tensor(ext_rets).to(self.device)
+        
+        states = torch.Tensor(states).to(self.device)
+        next_states = torch.Tensor(next_states).to(self.device)
+        actions = torch.Tensor(actions).to(torch.int64).to(self.device)
+        log_probs = torch.Tensor(log_probs).to(self.device)
+        advs = torch.Tensor(advs).to(self.device)
+        int_rets = torch.Tensor(int_rets).to(self.device)
+        ext_rets = torch.Tensor(ext_rets).to(self.device)
 
 
 
