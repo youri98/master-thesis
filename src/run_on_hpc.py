@@ -15,8 +15,6 @@ from main import train_model
 import wandb
 import torch
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-torch.distributed.init_process_group("mpi")
 
 if __name__ == '__main__':
     config = get_params()
