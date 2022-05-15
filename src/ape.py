@@ -46,9 +46,9 @@ class APE:
         if self.config["algo"] == "APE":
             self.total_trainable_params += list(self.discriminator.parameters())
         
-        if self.use_decoder:
-            self.decoder = DecoderModel()
-            self.total_trainable_params += list(self.decoder.parameters())
+        # if self.use_decoder:
+        #     self.decoder = DecoderModel()
+        #     self.total_trainable_params += list(self.decoder.parameters())
 
         self.optimizer = Adam(self.total_trainable_params, lr=self.config["lr"])
         # consider LBFGS

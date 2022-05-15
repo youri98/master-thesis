@@ -162,6 +162,7 @@ def train_model(config, **kwargs):
             if iteration % config["interval"] == 0 or iteration == config["total_rollouts"]:
                 logger.save_params(episode, iteration)
                 logger.save_recording_local(recording)
+                logger.save_score_to_json()
                 logger.time_stop()
 
                 with open("Models/" + logger.log_dir + "/logger.obj", "wb") as file_pi:
@@ -177,6 +178,7 @@ if __name__ == '__main__':
     config["total_rollouts"] = int(10)
     config["algo"] = "RND"
     config["verbose"] = True
+    config["interval"] = 1
 
     train_model(config)
     wandb.finish()

@@ -9,6 +9,7 @@ import wandb
 import json
 import cv2
 
+
 class Logger:
     def __init__(self, brain, **config):
         self.config = config
@@ -34,18 +35,22 @@ class Logger:
         self.timer = {}
 
         self.run_id = wandb.util.generate_id()
-        wandb.init(project="RND", entity="youri", id=self.run_id, resume="allow")
+        wandb.init(project="RND", entity="youri",
+                   id=self.run_id, resume="allow")
         wandb.config = self.config
-
 
         if self.config["mode"] == "train_from_scratch":
             self.create_model_folder()
-            
+
+        scoreskeys = ["Iteration", "Visited rooms", "Action Probability", "Intrinsic Reward", "PG Loss", "Discriminator Loss",
+                      "Ext Value Loss",  "Int Value Loss", "Advantage", "RND Loss", "Entrinsic Reward", "Entropy", "Recording"]
+        self.scores = {k: [] for k in scoreskeys}
 
         #self.exp_avg = lambda x, y: 0.9 * x + 0.1 * y if (y != 0).all() else y
 
     def reboot(self):
-        wandb.init(project="RND", entity="youri", resume="allow", id=self.run_id)
+        wandb.init(project="RND", entity="youri",
+                   resume="allow", id=self.run_id)
         wandb.config = self.config
 
     def create_model_folder(self):
@@ -61,20 +66,25 @@ class Logger:
         self.start_time = time.time()
 
     def time_stop(self, kind="training time"):
-        self.timer[kind] = self.timer[kind] + (time.time() - self.start_time) if kind in self.timer else (time.time() - self.start_time)
+        self.timer[kind] = self.timer[kind] + (time.time(
+        ) - self.start_time) if kind in self.timer else (time.time() - self.start_time)
 
     def log_recording(self, recording, fps=60):
         if recording is not None:
             recording = np.expand_dims(recording, 1)
-            wandb.log({"video": wandb.Video(np.array(recording), fps=fps, format='gif')})
+            wandb.log({"video": wandb.Video(
+                np.array(recording), fps=fps, format='gif')})
+        self.scores["Recording"].append(recording.tolist())
 
     def save_recording_local(self, recording, fps=60):
         if self.config["record"]:
-            frame_size = (self.config["obs_shape"][2], self.config["obs_shape"][1])
+            frame_size = (self.config["obs_shape"][2],
+                          self.config["obs_shape"][1])
 
-            fourcc = cv2.VideoWriter_fourcc(*'mp4v') 
+            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
 
-            out = cv2.VideoWriter("Models/" + self.log_dir + "/recording.mp4", fourcc, fps, frame_size)
+            out = cv2.VideoWriter(
+                "Models/" + self.log_dir + "/recording.mp4", fourcc, fps, frame_size)
 
             for image in recording:
                 #image = np.pad(image, ((height_pad, height_pad), (width_pad,width_pad)))
@@ -82,7 +92,7 @@ class Logger:
                 image = image[0]
                 image = image.astype(np.uint8)
                 image = np.expand_dims(image, axis=2)
-                image = np.tile(image, (1,1,3))
+                image = np.tile(image, (1, 1, 3))
 
                 out.write(image)
 
@@ -90,18 +100,25 @@ class Logger:
 
     def log_episode(self, *args):
         self.episode, self.episode_ext_reward, self.visited_rooms = args
-        self.max_episode_reward = max(self.max_episode_reward, self.episode_ext_reward)
+        self.max_episode_reward = max(
+            self.max_episode_reward, self.episode_ext_reward)
+
+    def save_score_to_json(self):
+        with open("Models/" + self.log_dir + '/scores.json', 'w') as file:
+            file.write(json.dumps(self.scores))
 
     def log_iteration(self, *args):
-        iteration, (pg_losses, ext_value_losses, int_value_losses, rnd_losses, disc_losses, entropies, advs), int_reward, ext_reward, action_prob = args
+        iteration, (pg_losses, ext_value_losses, int_value_losses, rnd_losses,
+                    disc_losses, entropies, advs), int_reward, ext_reward, action_prob = args
 
         # self.running_act_prob = self.exp_avg(self.running_act_prob, action_prob)
         # self.running_int_reward = self.exp_avg(self.running_int_reward, int_reward)
         # self.running_training_logs = self.exp_avg(self.running_training_logs, np.array(training_logs))
+
         params = {
             "Visited rooms": len(list(self.visited_rooms)),
             "Action Probability": action_prob,
-            "Intrinsic Reward": int_reward,
+            "Intrinsic Reward": int_reward.item(),
             "Entrinsic Reward": ext_reward,
             "PG Loss": pg_losses,
             "Ext Value Loss": ext_value_losses,
@@ -109,13 +126,19 @@ class Logger:
             "RND Loss": rnd_losses,
             "Discriminator Loss": disc_losses,
             "Entropy": entropies,
-            "Advantage": advs,
+            "Advantage": advs.item(),
             # "Intrinsic Explained variance": self.running_training_logs[5],
             # "Extrinsic Explained variance": self.running_training_logs[6],
         }
+
+        self.scores['Iteration'].append(iteration)
+        for k, v in params.items():
+            # if isinstance(v, torch.Tensor):
+            #     v = v.item()
+            self.scores[k].append(v)
+
         params.update(self.timer)
         wandb.log(params)
-
 
     def save_params(self, episode, iteration):
         torch.save({"current_policy_state_dict": self.brain.current_policy.state_dict(),
