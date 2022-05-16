@@ -1,11 +1,13 @@
 var ctx = document.getElementById("myChart");
 var modelname = "2022-05-15-15-13-26";
+var cancelled = false;
 
 var arr = "./src/Models".split("/");
 var last = arr[arr.length - 1] || arr[arr.length - 2];
 var dataset;
 var mouseMove = false;
 var prev = -1;
+var running = false;
 
 fetch("./src/Models/" + modelname + "/scores.json")
   .then((response) => response.json())
@@ -39,23 +41,29 @@ function makeChart(data) {
       },
       plugins: {
         tooltip: {
-          filter: function (tooltipItem) {
-            return tooltipItem.datasetIndex === 0;
-          },
-
           callbacks: {
             title: function (context) {
-              callerFun(context);
+              // just for the gif
+              mouseMove = dataset["Recording"][context[0].dataIndex] != prev;
+              if (mouseMove) {
+                prev = dataset["Recording"][context[0].dataIndex];
+                callerFun(context);
+              }
+              return "PG Loss " + dataset['PG Loss'][context[0].dataIndex];
             },
           },
+          
 
-          //   backgroundColor: '#000000',
-          //   titleFontSize: 16,
-          //   titleFontColor: '#0066ff',
-          //   bodyFontColor: '#000',
-          //   bodyFontSize: 14,
-          //   displayColors: false
+            backgroundColor: '#000000',
+            titleFontSize: 16,
+            titleFontColor: '#0066ff',
+            bodyFontColor: '#000',
+            bodyFontSize: 14,
+            displayColors: false,
+            position: "average",
+            boxWidth: 1000,
         },
+        
       },
     },
     plugins: [
@@ -84,50 +92,55 @@ var myImg = document.getElementById("img");
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-function callerFun(context) {
-  mouseMove = dataset["Recording"][context[0].dataIndex] != prev;
-  if (mouseMove){
-    plotRecording(context);
-    prev = dataset["Recording"][context[0].dataIndex]
-  }
-}
+async function callerFun(context) {
 
-async function plotRecording(context) {
   var canvas = document.createElement("canvas");
   var ctx = canvas.getContext("2d");
   recording = dataset["Recording"][context[0].dataIndex];
+  // console.log(context[0].dataIndex, cancelled);
 
   canvas.width = recording[0][0][0].length;
   canvas.height = recording[0][0][1].length;
-  mouseMove = context[0].dataIndex != prev;
 
   for (let frame of recording) {
-    console.log(context[0].dataIndex);
-    child = myImg.firstChild;
-
-    if (child != null) {
-      child.remove();
-    }
-
-    var idata = ctx.createImageData(canvas.width, canvas.height);
-    frame = frame.flat(2);
-
-    for (var i = 0; i < frame.length; i++) {
-      //grayscale to rgba
-      idata.data[4 * i] = frame[i];
-      idata.data[4 * i + 1] = frame[i];
-      idata.data[4 * i + 2] = frame[i];
-      idata.data[4 * i + 3] = 255; // not changing the transparency
-    }
-
-    ctx.putImageData(idata, 0, 0);
-    var image = new Image();
-    image.src = canvas.toDataURL();
-    myImg.appendChild(image);
-
+    plotRecording(frame, canvas, ctx);
     await sleep(10);
+    mouseMove = dataset["Recording"][context[0].dataIndex] != prev;
+    if (mouseMove) {
+      return;
+    }
   }
+
+  prev = dataset["Recording"][context[0].dataIndex];
 }
+
+function plotRecording(frame, canvas, ctx) {
+  child = myImg.firstChild;
+
+  if (child != null) {
+    child.remove();
+  }
+
+  var idata = ctx.createImageData(canvas.width, canvas.height);
+  frame = frame.flat(2);
+
+  for (var i = 0; i < frame.length; i++) {
+    //grayscale to rgba
+    idata.data[4 * i] = frame[i];
+    idata.data[4 * i + 1] = frame[i];
+    idata.data[4 * i + 2] = frame[i];
+    idata.data[4 * i + 3] = 255; // not changing the transparency
+  }
+
+  ctx.putImageData(idata, 0, 0);
+  var image = new Image();
+  image.src = canvas.toDataURL();
+  myImg.appendChild(image);
+
+  // release control, so that handlers can be called, and continue in 10ms
+}
+
+// }
 const background = () => {
   ctx.fillStyle = "##ff9505";
   ctx.fillRect(0, 0, size, size); // fill the entire canvas
