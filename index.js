@@ -19,7 +19,6 @@ fetch("./src/Models/" + modelname + "/scores.json")
 function makeChart(data) {
   var myChart = new Chart(ctx, {
     type: "line",
-    gifSize: 180,
     data: {
       recording: data["Recording"],
       labels: data["Iteration"],
@@ -27,10 +26,14 @@ function makeChart(data) {
         {
           label: "Intrinsic Reward",
           data: data["Intrinsic Reward"],
+          backgroundColor: "rgba(255,0,0,0.7)",
+          borderColor: "rgba(255,0,0,0.7)",
         },
         {
           label: "RND Loss",
           data: data["RND Loss"],
+          backgroundColor: "blue",
+          borderColor: "blue",
         },
       ],
     },
@@ -40,6 +43,7 @@ function makeChart(data) {
           enabled: true,
           position: "nearest",
           backgroundColor: "rbga(0,0,0,0)",
+          callbacks: {title: function(){return}}
         },
       },
       interaction: {
