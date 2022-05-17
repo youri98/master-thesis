@@ -33,7 +33,7 @@ class APE:
 
 
         if config["multiple_gpus"]:
-            self.current_policy = DistributedDataParallel(self.current_policy)
+            self.current_policy = DistributedDataParallel(self.current_policy, )
             self.predictor_model = DistributedDataParallel(self.predictor_model)
             self.target_model = DistributedDataParallel(self.target_model)
             self.discriminator = DistributedDataParallel(self.discriminator)
