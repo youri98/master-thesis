@@ -4,7 +4,7 @@ class Worker:
     def __init__(self, id, **config):
         self.id = id
         self.config = config
-        self.env_name = self.config["env_name"]
+        self.env_name = self.config["env"]
         self.max_episode_steps = self.config["max_frames_per_episode"]
         self.state_shape = self.config["state_shape"]
         self.env = make_atari(self.env_name, self.max_episode_steps)

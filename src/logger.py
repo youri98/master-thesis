@@ -59,7 +59,7 @@ class Logger:
         os.mkdir("Models/" + self.log_dir)
 
     def log_config_params(self):
-        with open("Models/" + self.log_dir + '/config.txt', 'w') as writer:
+        with open("Models/" + self.log_dir + '/config.json', 'w') as writer:
             writer.write(json.dumps(self.config))
 
     def time_start(self):

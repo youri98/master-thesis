@@ -25,7 +25,7 @@ def train_model(config, **kwargs):
         if personal_key is not None:
             os.environ["WANDB_API_KEY"] = personal_key.read().strip()
 
-    temp_env = gym.make(config["env_name"])
+    temp_env = gym.make(config["env"])
     config.update({"n_actions": temp_env.action_space.n})
     temp_env.close()
     config["n_workers"] = multiprocessing.cpu_count() * torch.cuda.device_count() if torch.cuda.is_available() else multiprocessing.cpu_count()
@@ -174,11 +174,12 @@ if __name__ == '__main__':
     #delete_files()
     config = get_params()
 
-    # run 1
-    config["total_rollouts"] = int(7)
-    config["algo"] = "APE"
-    config["verbose"] = True
-    config["interval"] = 1
+    # # run 1
+    # config["env"] = "VentureNoFrameskip-v4"
+    # config["total_rollouts"] = int(7)
+    # config["algo"] = "RND"
+    # config["verbose"] = True
+    # config["interval"] = 1
 
     train_model(config)
     wandb.finish()

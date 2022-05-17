@@ -31,8 +31,9 @@ def get_params():
      Parameters based on the "Exploration By Random Network Distillation" paper.
      https://arxiv.org/abs/1810.12894    
     """
+    # MontezumaRevengeNoFrameskip-v4
     # region default parameters
-    default_params = {"env_name": "MontezumaRevengeNoFrameskip-v4",
+    default_params = {
                       "state_shape": (1, 84, 84),
                       "obs_shape": (1, 84, 84),
                       "max_frames_per_episode": 4500,  # 4500 * 4 = 18K :D

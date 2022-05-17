@@ -150,3 +150,5 @@ sshkey.txt
 src/Models/
 src/wandb
 .token.txt
+src/runsomegames.sh
+/ROMS

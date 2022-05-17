@@ -8,3 +8,5 @@ ale-py
 atari-py
 moviepy 
 imageio
+matplotlib
+seaborn
