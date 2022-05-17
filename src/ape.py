@@ -12,7 +12,7 @@ from torch.nn.parallel import DistributedDataParallel
 torch.backends.cudnn.benchmark = True
 
 class APE:
-    def __init__(self, timesteps=8, use_decoder=False, encoding_size=512, multiple_feature_pred=False, run_from_hpc=False, **config):
+    def __init__(self, timesteps=8, use_decoder=False, encoding_size=512, multiple_feature_pred=False, **config):
 
         self.config = config
         self.mini_batch_size = self.config["batch_size"]
@@ -32,7 +32,7 @@ class APE:
         self.target_model = TargetModel(self.obs_shape, self.encoding_size).to(self.device)
 
 
-        if run_from_hpc:
+        if config["run_multiple_gpus"]:
             self.current_policy = DistributedDataParallel(self.current_policy)
             self.predictor_model = DistributedDataParallel(self.predictor_model)
             self.target_model = DistributedDataParallel(self.target_model)
