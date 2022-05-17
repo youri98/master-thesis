@@ -42,7 +42,7 @@ class Logger:
         if self.config["mode"] == "train_from_scratch":
             self.create_model_folder()
 
-        scoreskeys = ["Iteration", "Visited rooms", "Action Probability", "Intrinsic Reward", "PG Loss", "Discriminator Loss",
+        scoreskeys = ["Iteration", "Visited Rooms", "Action Probability", "Intrinsic Reward", "PG Loss", "Discriminator Loss",
                       "Ext Value Loss",  "Int Value Loss", "Advantage", "RND Loss", "Entrinsic Reward", "Entropy", "Recording"]
         self.scores = {k: [] for k in scoreskeys}
 
@@ -105,7 +105,10 @@ class Logger:
 
     def save_score_to_json(self):
         with open("Models/" + self.log_dir + '/scores.json', 'w') as file:
-            file.write(json.dumps(self.scores))
+            norm_scores = {k: (v if k in ["Discriminator Loss", "Visited Rooms", "Iteration", "Recording"] or np.linalg.norm(v) == 0 else (v/np.linalg.norm(v)).tolist()) for k,v in self.scores.items()}
+
+
+            file.write(json.dumps(norm_scores))
 
     def log_iteration(self, *args):
         iteration, (pg_losses, ext_value_losses, int_value_losses, rnd_losses,
@@ -116,10 +119,10 @@ class Logger:
         # self.running_training_logs = self.exp_avg(self.running_training_logs, np.array(training_logs))
 
         params = {
-            "Visited rooms": len(list(self.visited_rooms)),
+            "Visited Rooms": len(list(self.visited_rooms)),
             "Action Probability": action_prob,
             "Intrinsic Reward": int_reward.item(),
-            "Entrinsic Reward": ext_reward,
+            "Entrinsic Reward": ext_reward.item(),
             "PG Loss": pg_losses,
             "Ext Value Loss": ext_value_losses,
             "Int Value Loss": int_value_losses,

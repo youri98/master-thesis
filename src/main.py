@@ -175,8 +175,8 @@ if __name__ == '__main__':
     config = get_params()
 
     # run 1
-    config["total_rollouts"] = int(10)
-    config["algo"] = "RND"
+    config["total_rollouts"] = int(7)
+    config["algo"] = "APE"
     config["verbose"] = True
     config["interval"] = 1
 
