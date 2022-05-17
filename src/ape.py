@@ -287,7 +287,7 @@ class APE:
             for step in reversed(range(self.config["rollout_length"])):
                 rewems = rewems * gamma + intrinsic_rewards[worker][step]
                 intrinsic_returns[worker].insert(0, rewems)
-        self.int_reward_rms.update(np.ravel(intrinsic_returns).reshape(-1, 1))
+        self.int_reward_rms.update(np.ravel(intrinsic_returns.cpu().numpy()).reshape(-1, 1))
 
         return intrinsic_rewards / (self.int_reward_rms.var ** 0.5)
 
