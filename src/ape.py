@@ -278,7 +278,7 @@ class APE:
         # OpenAI's usage of Forward filter is definitely wrong;
         # Because: https://github.com/openai/random-network-distillation/issues/16#issuecomment-488387659
         if isinstance(intrinsic_rewards, torch.Tensor):
-            intrinsic_rewards = intrinsic_rewards.to(torch.float32)
+            intrinsic_rewards = intrinsic_rewards.to(torch.float32).cpu().numpy()
 
         gamma = self.config["int_gamma"]  # Make code faster.
         intrinsic_returns = [[] for _ in range(self.config["n_workers"])]
@@ -287,7 +287,7 @@ class APE:
             for step in reversed(range(self.config["rollout_length"])):
                 rewems = rewems * gamma + intrinsic_rewards[worker][step]
                 intrinsic_returns[worker].insert(0, rewems)
-        self.int_reward_rms.update(np.ravel(intrinsic_returns.cpu().numpy()).reshape(-1, 1))
+        self.int_reward_rms.update(np.ravel(intrinsic_returns).reshape(-1, 1))
 
         return intrinsic_rewards / (self.int_reward_rms.var ** 0.5)
 
