@@ -1,13 +1,11 @@
-var ctx = document.getElementById("myChart");
-var modelname = "2022-05-15-15-13-26";
-var cancelled = false;
+const modelname = "2022-05-17-11-44-03";
+const rolloutPerIteration = 128;
 
-var arr = "./src/Models".split("/");
-var last = arr[arr.length - 1] || arr[arr.length - 2];
+var ctx = document.getElementById("myChart");
+
 var dataset;
 var mouseMove = false;
 var prev = -1;
-var running = false;
 
 fetch("./src/Models/" + modelname + "/scores.json")
   .then((response) => response.json())
@@ -26,18 +24,73 @@ function makeChart(data) {
         {
           label: "Intrinsic Reward",
           data: data["Intrinsic Reward"],
-          backgroundColor: "rgba(255,0,0,0.7)",
-          borderColor: "rgba(255,0,0,0.7)",
+          backgroundColor: "rgba(122, 222, 149,.7)",
+          borderColor: "rgba(122, 222, 149,1)",
+          // yAxisID: 'y',
+          // xAxisID: 'x',
+
+        },
+        {
+          label: "Extrinsic Reward",
+          data: data["Extrinsic Reward"],
+          backgroundColor: "rgba(107, 196, 214,0.7)",
+          borderColor: "rgba(107, 196, 214,1 )",
+
+
         },
         {
           label: "RND Loss",
           data: data["RND Loss"],
-          backgroundColor: "blue",
-          borderColor: "blue",
+          backgroundColor: "rgba(214, 47, 47, 0.7)",
+          borderColor: "rgba(214, 47, 47, 1)",
+
+
+        },
+        {
+          label: "Discriminator Loss",
+          data: data["Discriminator Loss"],
+          backgroundColor: "rgba(138, 62, 173, 0.7)",
+          borderColor: "rgba(138, 62, 173, 0.7)",
+
+        },
+        {
+          label: "Visited Rooms",
+          data: data["Visited Rooms"],
+          backgroundColor: "rgba(212, 137, 40, 0.7)",
+          borderColor: "rgba(212, 137, 40, 0.7)",
+
+
+        },
+        {
+          label: "Entropy",
+          data: data["Entropy"],
+          backgroundColor: "rgba(55, 50, 209, 0.7)",
+          borderColor: "rgba(55, 50, 209, 0.7)",
+
+
         },
       ],
     },
     options: {
+      scales: {
+        x: {
+          title: {
+          display: true,
+            text: "Frames"
+        },
+        ticks: {
+          callback: function(value, index, ticks) {
+              return rolloutPerIteration* value;
+          }
+        },
+      },
+        y: {
+          title: {
+          display: true,
+            text: "Relative Scores"
+        },
+        }
+      },
       plugins: {
         tooltip: {
           enabled: true,
@@ -52,6 +105,28 @@ function makeChart(data) {
       },
     },
     plugins: [customTooltip],
+    title: {
+      display: true,
+      text: 'Chart Title',
+    }
+
+    // scales: {
+    //   y: {
+    //     type: 'linear',
+    //     display: true,
+    //     position: 'left',
+    //   },
+    //   y1: {
+    //     type: 'linear',
+    //     display: true,
+    //     position: 'right',
+
+    //     // grid line settings
+    //     grid: {
+    //       drawOnChartArea: false, // only want the grid lines for one axis to show up
+    //     },
+    //   },
+    // }
   });
 }
 
@@ -59,6 +134,7 @@ const customTooltip = {
   id: "customTooltip",
   afterDraw(chart, args, options) {
     if (chart.tooltip?._active?.length) {
+      // console.log(chart.data);
       var canvas = document.createElement("canvas");
       const activePoint = chart.tooltip._active[0];
       const datapoint = activePoint.index;
@@ -66,8 +142,6 @@ const customTooltip = {
       const { ctx } = chart;
       const sizeGif = 180;
       recording = chart.data.recording[datasetIndex];
-
-      ctx.fillStyle = "rgba(10,10,10,0.3)";
 
       // draw gif
       mouseMove = datasetIndex != prev;
@@ -86,7 +160,8 @@ const customTooltip = {
       ctx.moveTo(x, yAxis.top);
       ctx.lineTo(x, yAxis.bottom);
       ctx.lineWidth = 1;
-      ctx.strokeStyle = "#ff0000";
+      ctx.setLineDash([5, 5]);
+      ctx.strokeStyle = "#000000";
       ctx.stroke();
       ctx.restore();
     }
@@ -112,8 +187,8 @@ async function plotRecording(canvas, chart, recording, dataIndex, sizeGif) {
 
 function plotFrame(frame, canvas, chart, sizeGif) {
   // ctx = imgCanvas.getContext('2d');
-  const pointX = chart._active[1].element.x;
-  const pointY = chart._active[1].element.y;
+  const pointX = chart.tooltip.x;
+  const pointY = chart.tooltip.y;
   const offset = 8;
 
   // console.log(pointX, pointY);
@@ -135,7 +210,7 @@ function plotFrame(frame, canvas, chart, sizeGif) {
     function (value) {
       var x, y;
       if (pointX > chart.width /2) {
-        x = pointX- offset - sizeGif;
+        x = pointX - offset;
       } else {
         x = pointX + offset;
       }
@@ -166,32 +241,17 @@ function plotFrame(frame, canvas, chart, sizeGif) {
 }
 
 // }
-const background = () => {
-  ctx.fillStyle = "##ff9505";
-  ctx.fillRect(0, 0, size, size); // fill the entire canvas
-};
 
-// callbacks: {
-//   title: function (context) {
-//     // just for the gif
-//     mouseMove = dataset["Recording"][context[0].dataIndex] != prev;
-//     if (mouseMove) {
-//       prev = dataset["Recording"][context[0].dataIndex];
-//       callerFun(context);
-//     }
-//     return "PG Loss " + dataset['PG Loss'][context[0].dataIndex];
-//   },
-// },
 
-CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r) {
-  if (w < 2 * r) r = w / 2;
-  if (h < 2 * r) r = h / 2;
-  this.beginPath();
-  this.moveTo(x+r, y);
-  this.arcTo(x+w, y,   x+w, y+h, r);
-  this.arcTo(x+w, y+h, x,   y+h, r);
-  this.arcTo(x,   y+h, x,   y,   r);
-  this.arcTo(x,   y,   x+w, y,   r);
-  this.closePath();
-  return this;
-}
+// CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r) {
+//   if (w < 2 * r) r = w / 2;
+//   if (h < 2 * r) r = h / 2;
+//   this.beginPath();
+//   this.moveTo(x+r, y);
+//   this.arcTo(x+w, y,   x+w, y+h, r);
+//   this.arcTo(x+w, y+h, x,   y+h, r);
+//   this.arcTo(x,   y+h, x,   y,   r);
+//   this.arcTo(x,   y,   x+w, y,   r);
+//   this.closePath();
+//   return this;
+// }
