@@ -74,7 +74,7 @@ def train_model(config, **kwargs):
     else:
         rollout_base_shape = config["n_workers"], config["rollout_length"]
 
-        for iteration in tqdm(range(init_iteration, config["total_rollouts"]), disable=not config["verbose"]):
+        for iteration in tqdm(range(init_iteration, config["total_rollouts"] + 1), disable=not config["verbose"]):
             total_states = np.zeros(rollout_base_shape + config["state_shape"], dtype=np.uint8)
             total_actions = np.zeros(rollout_base_shape, dtype=np.uint8)
             total_action_probs = np.zeros(rollout_base_shape + (config["n_actions"],))

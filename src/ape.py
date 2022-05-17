@@ -32,7 +32,7 @@ class APE:
         self.target_model = TargetModel(self.obs_shape, self.encoding_size).to(self.device)
 
 
-        if config["run_multiple_gpus"]:
+        if config["multiple_gpus"]:
             self.current_policy = DistributedDataParallel(self.current_policy)
             self.predictor_model = DistributedDataParallel(self.predictor_model)
             self.target_model = DistributedDataParallel(self.target_model)
