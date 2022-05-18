@@ -9,7 +9,7 @@ import time
 if __name__ == '__main__':
     config = get_params()
     start = time.time()
-    train_model(config, run_from_hpc=False)
+    train_model(config)
     wandb.finish()
     stop = time.strftime('%H:%M:%S', time.gmtime(time.time() - start))
     print(f"program took {stop}")

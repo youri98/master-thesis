@@ -1,4 +1,4 @@
-const modelname = "2022-05-17-11-44-03";
+const modelname = "2022-05-17-17-43-28";
 const rolloutPerIteration = 128;
 
 var ctx = document.getElementById("myChart");

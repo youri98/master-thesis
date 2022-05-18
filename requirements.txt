@@ -10,3 +10,5 @@ moviepy
 imageio
 matplotlib
 seaborn
+gym[atari]
+autorom[accept-rom-license]

@@ -152,3 +152,4 @@ src/wandb
 .token.txt
 src/runsomegames.sh
 /ROMS
+/PPO-RND
