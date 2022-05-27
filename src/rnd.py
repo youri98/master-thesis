@@ -7,6 +7,7 @@ from torch.optim.adam import Adam
 from utils import mean_of_list, RunningMeanStd, clip_grad_norm_
 import torch.distributed.autograd as dist_autograd
 from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.nn import DataParallel
 from torch.distributed.optim import DistributedOptimizer
 import torch.distributed.rpc as rpc
 from torch.distributed.rpc import RRef
@@ -14,8 +15,11 @@ import torch.distributed as dist
 import torch.nn as nn
 import torch.optim as optim
 import torch.multiprocessing as mp
+import os
+
 
 dist.init_process_group("gloo")
+
 
 torch.backends.cudnn.benchmark = True
 gpu = True
@@ -34,10 +38,12 @@ class RND:
             param.requires_grad = False
 
         n_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0 
- 
+
         if gpu:
-            self.predictor_model = DDP(self.predictor_model, device_ids=[*range(n_gpus)])
-            self.current_policy = DDP(self.current_policy, device_ids=[*range(n_gpus)])
+            # self.predictor_model = DataParallel(self.predictor_model)
+            # self.current_policy = DataParallel(self.current_policy)
+            os.environ['MASTER_ADDR'] = '192.168.1.3'
+            os.environ['MASTER_PORT'] = '8888'
 
         self.total_trainable_params = list(self.current_policy.parameters()) + list(self.predictor_model.parameters())
         self.optimizer = Adam(self.total_trainable_params, lr=self.config["lr"])
@@ -74,9 +80,26 @@ class RND:
                   log_probs[idx], next_states[idx]
 
     # @mean_of_list
-    def train(self, states, actions, int_rewards,
+    def train(self, gpu, states, actions, int_rewards,
               ext_rewards, dones, int_values, ext_values,
               log_probs, next_int_values, next_ext_values, total_next_obs):
+
+        n_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0 
+
+        rank =  gpu
+        print("gpu: ", gpu, "n gpus: ", n_gpus)
+
+        dist.init_process_group(
+                backend='nccl',
+                init_method='env://',
+                world_size=n_gpus,
+                rank=rank
+            )
+
+        self.predictor_model = DDP(self.predictor_model, device_ids=[gpu])
+        self.current_policy = DDP(self.current_policy, device_ids=[gpu])
+
+
 
         int_rets = self.get_gae(int_rewards, int_values, next_int_values,
                                 np.zeros_like(dones), self.config["int_gamma"])

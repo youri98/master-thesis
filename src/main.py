@@ -13,7 +13,9 @@ import wandb
 import multiprocessing
 import os
 import pickle
+import torch.multiprocessing as mp
 
+gpu = True
 
 torch.autograd.set_detect_anomaly(True)
 
@@ -168,22 +170,24 @@ def train_model(config, **kwargs):
                 _ = agent.get_actions_and_values(next_states, batch=True)
 
             total_int_rewards = agent.normalize_int_rewards(total_int_rewards)
+            
+            n_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0 
 
+            train_args = {"states":concatenate(total_states),
+                                        "actions":total_actions,
+                                        "int_rewards":total_int_rewards,
+                                        "ext_rewards":total_ext_rewards,
+                                        "dones":total_dones,
+                                        "int_values":total_int_values,
+                                        "ext_values":total_ext_values,
+                                        "log_probs":concatenate(total_log_probs),
+                                        "next_int_values":next_int_values,
+                                        "next_ext_values":next_ext_values,
+                                        "total_next_obs":total_next_obs}
 
-       
+            training_logs = mp.spawn(agent.train, nprocs=n_gpus, args=train_args)
 
-
-            training_logs = agent.train(states=concatenate(total_states),
-                                        actions=total_actions,
-                                        int_rewards=total_int_rewards,
-                                        ext_rewards=total_ext_rewards,
-                                        dones=total_dones,
-                                        int_values=total_int_values,
-                                        ext_values=total_ext_values,
-                                        log_probs=concatenate(total_log_probs),
-                                        next_int_values=next_int_values,
-                                        next_ext_values=next_ext_values,
-                                        total_next_obs=total_next_obs)
+            # training_logs = agent.train(args)
 
             logger.time_stop("training time")
 
