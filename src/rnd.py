@@ -89,7 +89,7 @@ class RND:
         rank =  gpu
         print("gpu: ", gpu, "n gpus: ", n_gpus)
         print(self.mini_batch_size)
-        
+
         torch.distributed.init_process_group(
                 backend='nccl',
                 init_method='env://',
@@ -130,7 +130,7 @@ class RND:
             rank=rank)
 
         train_loader = torch.utils.data.DataLoader(dataset=train_dataset,
-                                                    batch_size=self.mini_batch_size,
+                                                    batch_size=32,
                                                     shuffle=False,
                                                     num_workers=0,
                                                     pin_memory=True,
