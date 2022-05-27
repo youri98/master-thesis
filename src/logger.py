@@ -84,7 +84,7 @@ class Logger:
             fourcc = cv2.VideoWriter_fourcc(*'mp4v')
 
             out = cv2.VideoWriter(
-                "Models/" + self.log_dir + "/recording.mp4", fourcc, fps, frame_size)
+                "Models/" + self.log_dir + "/recording.mp4", fourcc, fps, frame_size, 0)
 
             for image in recording:
                 #image = np.pad(image, ((height_pad, height_pad), (width_pad,width_pad)))

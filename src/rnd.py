@@ -11,7 +11,7 @@ from torch.nn import DataParallel
 from torch.distributed.optim import DistributedOptimizer
 import torch.distributed.rpc as rpc
 from torch.distributed.rpc import RRef
-import torch.distributed as dist
+import torch.distributed 
 import torch.nn as nn
 import torch.optim as optim
 import torch.multiprocessing as mp
@@ -88,7 +88,7 @@ class RND:
         rank =  gpu
         print("gpu: ", gpu, "n gpus: ", n_gpus)
 
-        dist.init_process_group(
+        torch.distributed.init_process_group(
                 backend='nccl',
                 init_method='env://',
                 world_size=n_gpus,
