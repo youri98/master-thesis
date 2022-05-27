@@ -17,7 +17,7 @@ import torch.optim as optim
 import torch.multiprocessing as mp
 import os
 from torch.utils.data import TensorDataset, DataLoader
-
+import sys
 
 
 
@@ -89,6 +89,11 @@ class RND:
 
         rank =  gpu
         print("gpu: ", gpu, "n gpus: ", n_gpus)
+        print(torch.cuda.memory_allocated())
+        torch.cuda.empty_cache() 
+        #print(sys.getsizeof(dataloader)))
+
+
 
         torch.distributed.init_process_group(
                 backend='gloo',
