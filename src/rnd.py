@@ -18,7 +18,6 @@ import torch.multiprocessing as mp
 import os
 
 
-dist.init_process_group("gloo")
 
 
 torch.backends.cudnn.benchmark = True
