@@ -16,6 +16,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.multiprocessing as mp
 import os
+from torch.utils.data import TensorDataset, DataLoader
 
 
 
@@ -95,6 +96,7 @@ class RND:
                 rank=rank
             )
 
+       
         self.predictor_model = DDP(self.predictor_model, device_ids=[gpu])
         self.current_policy = DDP(self.current_policy, device_ids=[gpu])
 
@@ -115,17 +117,28 @@ class RND:
 
         self.state_rms.update(total_next_obs)
         total_next_obs = ((total_next_obs - self.state_rms.mean) / (self.state_rms.var ** 0.5)).clip(-5, 5)
+        
+        
+        train_dataset = TensorDataset(states, actions,
+                                      int_rets, ext_rets, advs, log_probs,
+                                      total_next_obs)
+
+        train_sampler = torch.utils.data.distributed.DistributedSampler(
+            train_dataset,
+            num_replicas=n_gpus,
+            rank=rank)
+
+        train_loader = torch.utils.data.DataLoader(dataset=train_dataset,
+                                                    batch_size=self.mini_batch_size,
+                                                    shuffle=False,
+                                                    num_workers=0,
+                                                    pin_memory=True,
+                                                    sampler=train_sampler)
+
 
         pg_losses, ext_v_losses, int_v_losses, rnd_losses, entropies = [], [], [], [], []
         for epoch in range(self.config["n_epochs"]):
-            for state, action, int_return, ext_return, adv, old_log_prob, next_state in \
-                    self.choose_mini_batch(states=states,
-                                           actions=actions,
-                                           int_returns=int_rets,
-                                           ext_returns=ext_rets,
-                                           advs=advs,
-                                           log_probs=log_probs,
-                                           next_states=total_next_obs):
+            for state, action, int_return, ext_return, adv, old_log_prob, next_state in train_loader:
                 dist, int_value, ext_value, _ = self.current_policy(state)
                 entropy = dist.entropy().mean()
                 new_log_prob = dist.log_prob(action)
