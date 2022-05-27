@@ -88,7 +88,8 @@ class RND:
 
         rank =  gpu
         print("gpu: ", gpu, "n gpus: ", n_gpus)
-
+        print(self.mini_batch_size)
+        
         torch.distributed.init_process_group(
                 backend='nccl',
                 init_method='env://',
@@ -139,6 +140,7 @@ class RND:
         pg_losses, ext_v_losses, int_v_losses, rnd_losses, entropies = [], [], [], [], []
         for epoch in range(self.config["n_epochs"]):
             for state, action, int_return, ext_return, adv, old_log_prob, next_state in train_loader:
+                print("hi")
                 dist, int_value, ext_value, _ = self.current_policy(state)
                 entropy = dist.entropy().mean()
                 new_log_prob = dist.log_prob(action)
