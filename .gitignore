@@ -153,3 +153,4 @@ src/wandb
 src/runsomegames.sh
 /ROMS
 /PPO-RND
+Logs/
