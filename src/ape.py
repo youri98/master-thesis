@@ -1,4 +1,4 @@
-from models import PolicyModel, PredictorModel, TargetModel, DiscriminatorModel
+from ape_models import PolicyModel, PredictorModel, TargetModel, DiscriminatorModel
 import torch
 import numpy as np
 from torch.optim.adam import Adam
@@ -118,7 +118,21 @@ class APE:
 
         for t in range(self.config['n_mini_batch']):
             yield states[t], next_states[t], actions[t], log_probs[t], advs[t], int_rets[t], ext_rets[t]
+    
+    def choose_mini_batch(self, states, actions, int_returns, ext_returns, advs, log_probs, next_states):
+        states = torch.ByteTensor(states).to(self.device)
+        next_states = torch.Tensor(next_states).to(self.device)
+        actions = torch.ByteTensor(actions).to(self.device)
+        advs = torch.Tensor(advs).to(self.device)
+        int_returns = torch.Tensor(int_returns).to(self.device)
+        ext_returns = torch.Tensor(ext_returns).to(self.device)
+        log_probs = torch.Tensor(log_probs).to(self.device)
 
+        indices = np.random.randint(0, len(states), (self.config["n_mini_batch"], self.mini_batch_size))
+
+        for idx in indices:
+            yield states[idx], actions[idx], int_returns[idx], ext_returns[idx], advs[idx], \
+                  log_probs[idx], next_states[idx]
     @mean_of_list
     def train(self, states, actions, int_rewards,
               ext_rewards, dones, int_values, ext_values,
@@ -137,11 +151,9 @@ class APE:
 
         advs = ext_advs * self.config["ext_adv_coeff"] + int_advs * self.config["int_adv_coeff"]
 
-        self.state_rms.update(next_states)
+        self.state_rms.update(total_next_obs)
+        total_next_obs = ((total_next_obs - self.state_rms.mean) / (self.state_rms.var ** 0.5)).clip(-5, 5)
 
-        changes_in_states = ((next_states - self.state_rms.mean) / (self.state_rms.var ** 0.5)).clip(-5, 5)
-
-        
         states = torch.Tensor(states).to(self.device)
         next_states = torch.Tensor(next_states).to(self.device)
         actions = torch.Tensor(actions).to(torch.int64).to(self.device)
@@ -152,17 +164,26 @@ class APE:
 
         pg_losses, ext_value_losses, int_value_losses, rnd_losses, disc_losses, entropies = [], [], [], [], [], []
         for epoch in range(self.config["n_epochs"]):
-            for state, next_state, action, log_prob, adv, int_ret, ext_ret in self.generate_batches(states, next_states, actions, log_probs, advs, int_rets, ext_rets):
-                dist, int_value, ext_value, _ = self.current_policy(next_state.view(-1, *self.obs_shape))
+            for state, action, int_return, ext_return, adv, old_log_prob, next_state in \
+                    self.choose_mini_batch(states=states,
+                                           actions=actions,
+                                           int_returns=int_rets,
+                                           ext_returns=ext_rets,
+                                           advs=advs,
+                                           log_probs=log_probs,
+                                           next_states=total_next_obs):
+
+                dist, int_value, ext_value, _ = self.current_policy(state)
                 entropy = dist.entropy().mean()
-                new_log_prob = dist.log_prob(action.view(-1))
-                ratio = (new_log_prob - log_prob).exp()
+                new_log_prob = dist.log_prob(action)
+                ratio = (new_log_prob - old_log_prob).exp()
                 pg_loss = self.compute_pg_loss(ratio, adv)
 
-                int_value_loss = self.mse_loss(int_value.squeeze(-1), int_ret)
-                ext_value_loss = self.mse_loss(ext_value.squeeze(-1), ext_ret)
+                int_value_loss = self.mse_loss(int_value.squeeze(-1), int_return)
+                ext_value_loss = self.mse_loss(ext_value.squeeze(-1), ext_return)
 
                 critic_loss = 0.5 * (int_value_loss + ext_value_loss)
+
 
                 if self.config["algo"] == "APE":
                     action = torch.nn.functional.one_hot(action, num_classes=self.n_actions)
@@ -184,6 +205,22 @@ class APE:
 
         return pg_losses, ext_value_losses, int_value_losses, rnd_losses, disc_losses, entropies, advs #, int_values, int_rets, ext_values, ext_rets
     
+    def calculate_int_rewards(self, next_states, batch=True):
+        if not batch:
+            next_states = np.expand_dims(next_states, 0)
+        next_states = np.clip((next_states - self.state_rms.mean) / (self.state_rms.var ** 0.5), -5, 5,
+                              dtype="float32")  # dtype to avoid '.float()' call for pytorch.
+        next_states = torch.from_numpy(next_states).to(self.device)
+        
+        predictor_encoded_features = self.predictor_model(next_states)
+        target_encoded_features = self.target_model(next_states)
+
+        int_reward = (predictor_encoded_features - target_encoded_features).pow(2).mean(1)
+        if not batch:
+            return int_reward.detach().cpu().numpy()
+        else:
+            return int_reward.detach().cpu().numpy().reshape((self.config["n_workers"], self.config["rollout_length"]))
+
     def calculate_int_rewards(self, next_states, actions, batch=True):
         if not batch:
             next_states = np.expand_dims(next_states, 0)

@@ -11,9 +11,9 @@ import cv2
 
 
 class Logger:
-    def __init__(self, brain, **config):
+    def __init__(self, agent, **config):
         self.config = config
-        self.brain = brain
+        self.agent = agent
         self.log_dir = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
         self.start_time = 0
         self.duration = 0
@@ -111,9 +111,11 @@ class Logger:
             file.write(json.dumps(norm_scores))
 
     def log_iteration(self, *args):
-        iteration, (pg_losses, ext_value_losses, int_value_losses, rnd_losses,
-                    disc_losses, entropies, advs), int_reward, ext_reward, action_prob = args
-
+        if self.config["algo"] == 'APE':
+            iteration, (pg_losses, ext_value_losses, int_value_losses, rnd_losses,
+                        disc_losses, entropies, advs), int_reward, ext_reward, action_prob = args
+        else:
+            iteration, (pg_losses, ext_value_losses, int_value_losses, rnd_losses, entropies), int_reward, ext_reward, action_prob = args
         # self.running_act_prob = self.exp_avg(self.running_act_prob, action_prob)
         # self.running_int_reward = self.exp_avg(self.running_int_reward, int_reward)
         # self.running_training_logs = self.exp_avg(self.running_training_logs, np.array(training_logs))
@@ -127,12 +129,14 @@ class Logger:
             "Ext Value Loss": ext_value_losses,
             "Int Value Loss": int_value_losses,
             "RND Loss": rnd_losses,
-            "Discriminator Loss": disc_losses,
             "Entropy": entropies,
-            "Advantage": advs.item(),
+            #"Advantage": advs.item(),
             # "Intrinsic Explained variance": self.running_training_logs[5],
             # "Extrinsic Explained variance": self.running_training_logs[6],
         }
+
+        if self.config['algo'] == 'APE':
+            params["Discriminator Loss"] = disc_losses
 
         self.scores['Iteration'].append(iteration)
         for k, v in params.items():
@@ -144,23 +148,26 @@ class Logger:
         wandb.log(params)
 
     def save_params(self, episode, iteration):
-        torch.save({"current_policy_state_dict": self.brain.current_policy.state_dict(),
-                    "predictor_model_state_dict": self.brain.predictor_model.state_dict(),
-                    "target_model_state_dict": self.brain.target_model.state_dict(),
-                    "discriminator_model_state_dict": self.brain.discriminator.state_dict(),
-                    "optimizer_state_dict": self.brain.optimizer.state_dict(),
-                    "state_rms_mean": self.brain.state_rms.mean,
-                    "state_rms_var": self.brain.state_rms.var,
-                    "state_rms_count": self.brain.state_rms.count,
-                    "int_reward_rms_mean": self.brain.int_reward_rms.mean,
-                    "int_reward_rms_var": self.brain.int_reward_rms.var,
-                    "int_reward_rms_count": self.brain.int_reward_rms.count,
+        params = {"current_policy_state_dict": self.agent.current_policy.state_dict(),
+                    "predictor_model_state_dict": self.agent.predictor_model.state_dict(),
+                    "target_model_state_dict": self.agent.target_model.state_dict(),
+                    "optimizer_state_dict": self.agent.optimizer.state_dict(),
+                    "state_rms_mean": self.agent.state_rms.mean,
+                    "state_rms_var": self.agent.state_rms.var,
+                    "state_rms_count": self.agent.state_rms.count,
+                    "int_reward_rms_mean": self.agent.int_reward_rms.mean,
+                    "int_reward_rms_var": self.agent.int_reward_rms.var,
+                    "int_reward_rms_count": self.agent.int_reward_rms.count,
                     "iteration": iteration,
                     "episode": episode,
                     "running_reward": self.running_ext_reward,
                     "visited_rooms": self.visited_rooms
-                    },
-                   "Models/" + self.log_dir + "/params.pth")
+                    }
+
+        if self.config['algo'] == "APE":
+            params["discriminator_model_state_dict"] = self.agent.discriminator.state_dict()
+
+        torch.save(params, "Models/" + self.log_dir + "/params.pth")
 
     def load_weights(self, model_name=None):
         if model_name is not None:

@@ -10,58 +10,19 @@ def conv_shape(input_dims, kernel_size, stride, padding=0):
     return ((input_dims[0] + 2 * padding - kernel_size) // stride + 1,
             (input_dims[1] + 2 * padding - kernel_size) // stride + 1)
 
-
-# def setup_environment(rom: str) -> ALEInterface:
-#     game_dict = {"MontezumaRevenge": MontezumaRevenge,
-#                  "Breakout": Breakout}
-#     ale = ALEInterface()
-#     ale.loadROM(game_dict[rom])
-#     return ale
-
-# def plot_score(total_e_score, total_i_score):
-
-#     figure_file = 'plots/score.png'
-#     fig = plt.figure(1, figsize=(8, 3))
-#     #plt.ylim(ymin=0)
-#     plt.yscale('log')
-
-#     for i, (e_score, i_score) in enumerate(zip(total_e_score, total_i_score)):
-#         x = [i+1 for i in range(len(e_score))]
-#         plt.plot(x, i_score, color=((i+1)/(len(total_e_score) + 1), 0, 0))
-#         plt.plot(x, e_score, color=(0, 0, (i+1)/(len(total_e_score) + 1)))
-
-#     now = datetime.datetime.now()
-#     plt.savefig(f"plots/{now.hour}{now.minute}-reward")
-
-
-# def plot_learning_curve(x, scores, figure_file):
-#     running_avg = np.zeros(len(scores))
-#     for i in range(len(running_avg)):
-#         running_avg[i] = np.mean(scores[max(0, i-100):(i+1)])
-#     plt.plot(x, running_avg)
-#     plt.title('Running average of previous 100 scores')
-#     plt.savefig(figure_file)
-
-
-def delete_files():
-    dir = os.getcwd()
-
-    for folder in ["/Models/"]:
-
-        p = dir + folder
-        file_names = [name for name in os.listdir(p)]
-        for file in file_names:
-            try:
-                os.remove(p+file)
-            except:
-                shutil.rmtree(p+file)
+import numpy as np
+import cv2
+import gym
+from copy import deepcopy
+import torch
+from torch._six import inf
 
 
 def mean_of_list(func):
     def function_wrapper(*args, **kwargs):
         lists = func(*args, **kwargs)
-        return [sum(l) / len(l) if len(l) != 0 else 0 for l in lists]  # + [explained_variance(lists[-4], lists[-3])] + \
-        #[explained_variance(lists[-2], lists[-1])]
+        return [sum(list) / len(list) for list in lists[:-4]] + [explained_variance(lists[-4], lists[-3])] + \
+               [explained_variance(lists[-2], lists[-1])]
 
     return function_wrapper
 
@@ -72,15 +33,15 @@ def preprocessing(img):
     return img
 
 
-# def stack_states(stacked_frames, state, is_new_episode):
-#     frame = preprocessing(state)
+def stack_states(stacked_frames, state, is_new_episode):
+    frame = preprocessing(state)
 
-#     if is_new_episode:
-#         stacked_frames = np.stack([frame for _ in range(4)], axis=0)
-#     else:
-#         stacked_frames = stacked_frames[1:, ...]
-#         stacked_frames = np.concatenate([stacked_frames, np.expand_dims(frame, axis=0)], axis=0)
-#     return stacked_frames
+    if is_new_episode:
+        stacked_frames = np.stack([frame for _ in range(4)], axis=0)
+    else:
+        stacked_frames = stacked_frames[1:, ...]
+        stacked_frames = np.concatenate([stacked_frames, np.expand_dims(frame, axis=0)], axis=0)
+    return stacked_frames
 
 
 # Calculates if value function is a good predictor of the returns (ev > 1)
@@ -94,12 +55,16 @@ def explained_variance(ypred, y):
         ev=1  =>  perfect prediction
         ev<0  =>  worse than just predicting zero
     """
-    assert y.ndim == 1 and ypred.ndim == 1
+    if isinstance(ypred, list):
+        ypred = np.array(ypred)
+    if isinstance(y, list):
+        y = np.array(y)    
+    #assert y.ndim == 1 and ypred.ndim == 1
     vary = np.var(y)
     return np.nan if vary == 0 else 1 - np.var(y - ypred) / vary
 
 
-def make_atari(env_id, max_episode_steps, sticky_action=True, max_and_skip=False):
+def make_atari(env_id, max_episode_steps, sticky_action=True, max_and_skip=True):
     env = gym.make(env_id)
     env._max_episode_steps = max_episode_steps * 4
     assert 'NoFrameskip' in env.spec.id
@@ -108,7 +73,7 @@ def make_atari(env_id, max_episode_steps, sticky_action=True, max_and_skip=False
     if max_and_skip:
         env = RepeatActionEnv(env)
     env = MontezumaVisitedRoomEnv(env, 3)
-    #env = AddRandomStateToInfoEnv(env)
+    env = AddRandomStateToInfoEnv(env)
 
     return env
 
@@ -134,8 +99,7 @@ class StickyActionEnv(gym.Wrapper):
 class RepeatActionEnv(gym.Wrapper):
     def __init__(self, env):
         gym.Wrapper.__init__(self, env)
-        self.successive_frame = np.zeros(
-            (2,) + self.env.observation_space.shape, dtype=np.uint8)
+        self.successive_frame = np.zeros((2,) + self.env.observation_space.shape, dtype=np.uint8)
 
     def reset(self, **kwargs):
         return self.env.reset(**kwargs)
@@ -205,10 +169,6 @@ class RunningMeanStd:
         self.count = epsilon
 
     def update(self, x):
-        # annoying conjugate, because tensor bfloat16 is not supported by numpy
-        if isinstance(x[0][0], torch.Tensor):
-            x = np.array([i[0] for i in x]).astype(float)
-            
         batch_mean = np.mean(x, axis=0)
         batch_var = np.var(x, axis=0)
         batch_count = x.shape[0]
@@ -233,34 +193,34 @@ def update_mean_var_count_from_moments(mean, var, count, batch_mean, batch_var, 
     return new_mean, new_var, new_count
 
 
-# class RewardForwardFilter(object):
-#     def __init__(self, gamma):
-#         self.rewems = None
-#         self.gamma = gamma
+class RewardForwardFilter(object):
+    def __init__(self, gamma):
+        self.rewems = None
+        self.gamma = gamma
 
-#     def update(self, rews):
-#         if self.rewems is None:
-#             self.rewems = rews
-#         else:
-#             self.rewems = self.rewems * self.gamma + rews
-#         return self.rewems
+    def update(self, rews):
+        if self.rewems is None:
+            self.rewems = rews
+        else:
+            self.rewems = self.rewems * self.gamma + rews
+        return self.rewems
 
 
-# def clip_grad_norm_(parameters, norm_type: float = 2.0):
-#     """
-#     This is the official clip_grad_norm implemented in pytorch but the max_norm part has been removed.
-#     https://github.com/pytorch/pytorch/blob/52f2db752d2b29267da356a06ca91e10cd732dbc/torch/nn/utils/clip_grad.py#L9
-#     """
-#     if isinstance(parameters, torch.Tensor):
-#         parameters = [parameters]
-#     parameters = [p for p in parameters if p.grad is not None]
-#     norm_type = float(norm_type)
-#     if len(parameters) == 0:
-#         return torch.tensor(0.)
-#     device = parameters[0].grad.device
-#     if norm_type == inf:
-#         total_norm = max(p.grad.detach().abs().max().to(device) for p in parameters)
-#     else:
-#         total_norm = torch.norm(torch.stack([torch.norm(p.grad.detach(), norm_type).to(device) for p in parameters]),
-#                                 norm_type)
-#     return total_norm
+def clip_grad_norm_(parameters, norm_type: float = 2.0):
+    """
+    This is the official clip_grad_norm implemented in pytorch but the max_norm part has been removed.
+    https://github.com/pytorch/pytorch/blob/52f2db752d2b29267da356a06ca91e10cd732dbc/torch/nn/utils/clip_grad.py#L9
+    """
+    if isinstance(parameters, torch.Tensor):
+        parameters = [parameters]
+    parameters = [p for p in parameters if p.grad is not None]
+    norm_type = float(norm_type)
+    if len(parameters) == 0:
+        return torch.tensor(0.)
+    device = parameters[0].grad.device
+    if norm_type == inf:
+        total_norm = max(p.grad.detach().abs().max().to(device) for p in parameters)
+    else:
+        total_norm = torch.norm(torch.stack([torch.norm(p.grad.detach(), norm_type).to(device) for p in parameters]),
+                                norm_type)
+    return total_norm

@@ -34,7 +34,7 @@ def get_params():
     # MontezumaRevengeNoFrameskip-v4
     # region default parameters
     default_params = {
-                      "state_shape": (1, 84, 84),
+                      "state_shape": (4, 84, 84),
                       "obs_shape": (1, 84, 84),
                       "max_frames_per_episode": 4500,  # 4500 * 4 = 18K :D
                       "rollout_length": 128,
