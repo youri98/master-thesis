@@ -173,21 +173,21 @@ def train_model(config, **kwargs):
             
             n_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0 
 
-            train_args = {"states":concatenate(total_states),
-                                        "actions":total_actions,
-                                        "int_rewards":total_int_rewards,
-                                        "ext_rewards":total_ext_rewards,
-                                        "dones":total_dones,
-                                        "int_values":total_int_values,
-                                        "ext_values":total_ext_values,
-                                        "log_probs":concatenate(total_log_probs),
-                                        "next_int_values":next_int_values,
-                                        "next_ext_values":next_ext_values,
-                                        "total_next_obs":total_next_obs}
+            train_args = (concatenate(total_states),
+                                        total_actions,
+                                        total_int_rewards,
+                                        total_ext_rewards,
+                                        total_dones,
+                                        total_int_values,
+                                        total_ext_values,
+                                        concatenate(total_log_probs),
+                                        next_int_values,
+                                        next_ext_values,
+                                        total_next_obs)
 
             n_nodes = 1
             world_size = n_gpus * n_nodes
-            training_logs = mp.spawn(agent.train, nprocs=n_gpus, args=(world_size,), kwargs=train_args, join=True)
+            training_logs = mp.spawn(agent.train, nprocs=n_gpus, args=(world_size,train_args), join=True)
 
             # training_logs = agent.train(args)
 
