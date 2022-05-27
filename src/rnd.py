@@ -102,7 +102,9 @@ class RND:
         #print(sys.getsizeof(dataloader)))
         # print(torch.distributed.is_nccl_available())
 
-
+        print(torch.distributed.is_available())
+        print(torch.distributed.is_nccl_available())
+        
         torch.distributed.init_process_group(
                 backend='nccl',
                 init_method='env://',
