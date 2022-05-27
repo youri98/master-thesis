@@ -88,7 +88,6 @@ class RND:
 
         rank =  gpu
         print("gpu: ", gpu, "n gpus: ", n_gpus)
-        print(self.mini_batch_size)
 
         torch.distributed.init_process_group(
                 backend='nccl',
@@ -136,6 +135,7 @@ class RND:
                                                     pin_memory=True,
                                                     sampler=train_sampler)
 
+        print(train_loader.shape)
 
         pg_losses, ext_v_losses, int_v_losses, rnd_losses, entropies = [], [], [], [], []
         for epoch in range(self.config["n_epochs"]):
