@@ -104,6 +104,8 @@ class RND:
 
         print(torch.distributed.is_available())
         print(torch.distributed.is_nccl_available())
+        os.environ['MASTER_ADDR'] = 'localhost'
+        os.environ['MASTER_PORT'] = '12355'
         
         torch.distributed.init_process_group(
                 backend='nccl',
