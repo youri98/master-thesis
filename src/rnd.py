@@ -19,7 +19,15 @@ import os
 from torch.utils.data import TensorDataset, DataLoader
 import sys
 
+def setup(rank, world_size):
+    os.environ['MASTER_ADDR'] = 'localhost'
+    os.environ['MASTER_PORT'] = '12355'
 
+    # initialize the process group
+    torch.dist.init_process_group("nccl", rank=rank, world_size=world_size)
+
+def cleanup():
+    torch.dist.destroy_process_group()
 
 torch.backends.cudnn.benchmark = True
 gpu = True
@@ -81,31 +89,31 @@ class RND:
                   log_probs[idx], next_states[idx]
 
     # @mean_of_list
-    def train(self, gpu, states, actions, int_rewards,
+    def train(self, rank, world_size, states, actions, int_rewards,
               ext_rewards, dones, int_values, ext_values,
               log_probs, next_int_values, next_ext_values, total_next_obs):
+        setup(rank, world_size)
 
         n_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0 
 
-        rank =  gpu
-        print("gpu: ", gpu, "n gpus: ", n_gpus)
-        print(torch.cuda.memory_allocated())
+        print("gpu: ", rank, "n gpus: ", n_gpus)
+        # print(torch.cuda.memory_allocated())
         torch.cuda.empty_cache() 
         #print(sys.getsizeof(dataloader)))
-
+        # print(torch.distributed.is_nccl_available())
 
 
         torch.distributed.init_process_group(
-                backend='gloo',
+                backend='nccl',
                 init_method='env://',
-                world_size=n_gpus,
+                world_size=world_size,
                 rank=rank
             )
         print("hello")
 
        
-        self.predictor_model = DDP(self.predictor_model, device_ids=[gpu])
-        self.current_policy = DDP(self.current_policy, device_ids=[gpu])
+        self.predictor_model = DDP(self.predictor_model, device_ids=[rank])
+        self.current_policy = DDP(self.current_policy, device_ids=[rank])
 
 
 
@@ -170,7 +178,7 @@ class RND:
                 rnd_losses.append(rnd_loss.item())
                 entropies.append(entropy.item())
                 # https://github.com/openai/random-network-distillation/blob/f75c0f1efa473d5109d487062fd8ed49ddce6634/ppo_agent.py#L187
-
+        cleanup()
         return np.array(pg_losses).mean(), np.array(ext_v_losses).mean(), np.array(int_v_losses).mean(), np.array(rnd_losses).mean(), np.array(entropies).mean()
 
     def optimize(self, loss):

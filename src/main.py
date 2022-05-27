@@ -185,7 +185,9 @@ def train_model(config, **kwargs):
                                         "next_ext_values":next_ext_values,
                                         "total_next_obs":total_next_obs}
 
-            training_logs = mp.spawn(agent.train, nprocs=n_gpus, args=train_args)
+            n_nodes = 1
+            world_size = n_gpus * n_nodes
+            training_logs = mp.spawn(agent.train, nprocs=n_gpus, args=(world_size, train_args), join=True)
 
             # training_logs = agent.train(args)
 
