@@ -42,6 +42,7 @@ class RND:
         if gpu:
             # self.predictor_model = DataParallel(self.predictor_model)
             # self.current_policy = DataParallel(self.current_policy)
+            
             os.environ['MASTER_ADDR'] = '192.168.1.3'
             os.environ['MASTER_PORT'] = '8888'
 
@@ -90,11 +91,12 @@ class RND:
         print("gpu: ", gpu, "n gpus: ", n_gpus)
 
         torch.distributed.init_process_group(
-                backend='nccl',
+                backend='gloo',
                 init_method='env://',
                 world_size=n_gpus,
                 rank=rank
             )
+        print("hello")
 
        
         self.predictor_model = DDP(self.predictor_model, device_ids=[gpu])
