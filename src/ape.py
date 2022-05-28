@@ -212,43 +212,41 @@ class APE:
 
         return pg_losses, ext_v_losses, int_v_losses, rnd_losses, disc_losses, entropies, advs #, int_values, int_rets, ext_values, ext_rets
     
-    def calculate_int_rewards(self, next_states, batch=True):
-        if not batch:
-            next_states = np.expand_dims(next_states, 0)
-        next_states = np.clip((next_states - self.state_rms.mean) / (self.state_rms.var ** 0.5), -5, 5,
-                              dtype="float32")  # dtype to avoid '.float()' call for pytorch.
-        next_states = torch.from_numpy(next_states).to(self.device)
+    # def calculate_int_rewards(self, next_states, batch=True):
+    #     if not batch:
+    #         next_states = np.expand_dims(next_states, 0)
+    #     next_states = np.clip((next_states - self.state_rms.mean) / (self.state_rms.var ** 0.5), -5, 5,
+    #                           dtype="float32")  # dtype to avoid '.float()' call for pytorch.
+    #     next_states = torch.from_numpy(next_states).to(self.device)
         
-        predictor_encoded_features = self.predictor_model(next_states)
-        target_encoded_features = self.target_model(next_states)
+    #     predictor_encoded_features = self.predictor_model(next_states)
+    #     target_encoded_features = self.target_model(next_states)
 
-        int_reward = (predictor_encoded_features - target_encoded_features).pow(2).mean(1)
-        if not batch:
-            return int_reward.detach().cpu().numpy()
-        else:
-            return int_reward.detach().cpu().numpy().reshape((self.config["n_workers"], self.config["rollout_length"]))
+    #     int_reward = (predictor_encoded_features - target_encoded_features).pow(2).mean(1)
+    #     if not batch:
+    #         return int_reward.detach().cpu().numpy()
+    #     else:
+    #         return int_reward.detach().cpu().numpy().reshape((self.config["n_workers"], self.config["rollout_length"]))
 
     def calculate_int_rewards(self, next_states, actions, batch=True):
         if not batch:
             next_states = np.expand_dims(next_states, 0)
-        # next_states = np.clip((next_states - self.state_rms.mean) / (self.state_rms.var ** 0.5), -5, 5,
-        #                       dtype="float32")  # dtype to avoid '.float()' call for pytorch.
+        next_states = np.clip((next_states - self.state_rms.mean) / (self.state_rms.var ** 0.5), -5, 5,
+                              dtype="float32")  # dtype to avoid '.float()' call for pytorch.
+
+
         next_states = torch.from_numpy(next_states).type(torch.float32).to(self.device)
+
         actions = torch.from_numpy(actions).to(torch.int64).to(self.device)
         actions = torch.nn.functional.one_hot(actions, num_classes=self.n_actions)
 
         predictor_encoded_features = self.predictor_model(next_states).detach()
         target_encoded_features = self.target_model(next_states).detach()
+
         predictor_encoded_features = predictor_encoded_features.view(-1, self.timesteps, self.encoding_size)
         target_encoded_features = target_encoded_features.view(-1, self.timesteps, self.encoding_size)
-        actions = actions.view(-1, self.timesteps, self.n_actions)
 
-        if self.config["algo"] == "RND":
-            rnd_loss = (predictor_encoded_features - target_encoded_features).pow(2).mean(-1)
-            if not batch:
-                return rnd_loss.detach()
-            else:
-                return rnd_loss.detach().reshape((self.config["n_workers"], self.config["rollout_length"]))
+        actions = actions.view(-1, self.timesteps, self.n_actions)
 
 
         mask = torch.randint(0, 2, size=(*predictor_encoded_features.shape[:-1], self.pred_size)).to(self.device)

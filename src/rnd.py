@@ -178,6 +178,7 @@ class RND:
         return concatenate(returns)
 
     def calculate_int_rewards(self, next_states, batch=True):
+        torch.cuda.empty_cache() 
         if not batch:
             next_states = np.expand_dims(next_states, 0)
         next_states = np.clip((next_states - self.state_rms.mean) / (self.state_rms.var ** 0.5), -5, 5,
