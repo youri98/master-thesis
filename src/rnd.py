@@ -80,7 +80,8 @@ class RND:
             print("OUTside", state.shape)
             output = self.current_policy(state)
             print(output)
-            int_value, ext_value, action_prob = output
+            int_value, ext_value, action_prob = output.mean(1)
+            print(int_value, ext_value, action_prob)
             dist = Categorical(action_prob)
             action = dist.sample()
             log_prob = dist.log_prob(action)
