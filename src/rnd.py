@@ -77,10 +77,8 @@ class RND:
         state = from_numpy(state).to(self.device)
 
         with torch.no_grad():
-            print("OUTside", state.shape)
             output = self.current_policy(state)
-            print(output)
-            int_value, ext_value, action_prob = np.array(output).mean(1)
+            int_value, ext_value, action_prob = np.mean(np.array(output), axis=0)
             print(int_value, ext_value, action_prob)
             dist = Categorical(action_prob)
             action = dist.sample()
