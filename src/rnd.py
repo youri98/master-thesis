@@ -65,7 +65,7 @@ class RND:
             state = np.expand_dims(state, 0)
         state = from_numpy(state).to(self.device)
         
-        torch.cuda.empty_cache() 
+        # torch.cuda.empty_cache() 
 
         with torch.no_grad():
             outputs = self.current_policy(state)
@@ -128,7 +128,7 @@ class RND:
                                                                                                                log_probs=log_probs,
                                                                                                                next_states=total_next_obs):
                 #print("inside batch ", state.shape)
-                torch.cuda.empty_cache() 
+                # torch.cuda.empty_cache() 
 
                 outputs = self.current_policy(state)
                 int_value, ext_value, action_prob = outputs
@@ -180,7 +180,7 @@ class RND:
         return concatenate(returns)
 
     def calculate_int_rewards(self, next_states, batch=True):
-        torch.cuda.empty_cache() 
+        # torch.cuda.empty_cache() 
         if not batch:
             next_states = np.expand_dims(next_states, 0)
         next_states = np.clip((next_states - self.state_rms.mean) / (self.state_rms.var ** 0.5), -5, 5,
