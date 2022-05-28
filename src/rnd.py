@@ -74,7 +74,7 @@ class RND:
             state = np.expand_dims(state, 0)
         state = from_numpy(state).to(self.device)
 
-        state.view(self.n_gpus, -1, self.state_shape)
+        state.view(self.n_gpus, -1, *self.state_shape)
 
         with torch.no_grad():
 
