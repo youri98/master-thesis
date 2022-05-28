@@ -48,7 +48,7 @@ def get_params():
                       "int_adv_coeff": 1,
                       "ent_coeff": 0.001,
                       "clip_range": 0.1,
-                      "pre_normalization_steps": 50,
+                      "pre_normalization_steps": 5,
                       }
 
     # endregion

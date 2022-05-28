@@ -143,10 +143,10 @@ class APE:
         for idx in indices:
             yield states[idx], actions[idx], int_returns[idx], ext_returns[idx], advs[idx], \
                   log_probs[idx], next_states[idx]
-    @mean_of_list
+    #@mean_of_list
     def train(self, states, actions, int_rewards,
               ext_rewards, dones, int_values, ext_values,
-              log_probs, next_int_values, next_ext_values, next_states):
+              log_probs, next_int_values, next_ext_values, total_next_obs):
 
         int_rets = self.get_gae(int_rewards, int_values, next_int_values,
                                 np.zeros_like(dones), self.config["int_gamma"])
@@ -194,12 +194,6 @@ class APE:
 
                 critic_loss = 0.5 * (int_value_loss + ext_value_loss)
 
-                pg_losses.append(pg_loss.item())
-                ext_v_losses.append(ext_value_loss.item())
-                int_v_losses.append(int_value_loss.item())
-                rnd_losses.append(rnd_loss.item())
-                entropies.append(entropy.item())
-
                 action = torch.nn.functional.one_hot(action, num_classes=self.n_actions)
                 action = action.view(-1, self.timesteps, self.n_actions)
                 disc_loss, rnd_loss = self.calculate_loss(next_state, action)
@@ -212,8 +206,7 @@ class APE:
                 ext_v_losses.append(ext_value_loss.item())
                 int_v_losses.append(int_value_loss.item())
                 rnd_losses.append(rnd_loss.item())
-                if self.config["algo"] == "APE":
-                    disc_losses.append(disc_loss.item())
+                disc_losses.append(disc_loss.item())
                 entropies.append(entropy.item())
             # https://github.com/openai/random-network-distillation/blob/f75c0f1efa473d5109d487062fd8ed49ddce6634/ppo_agent.py#L187
 
