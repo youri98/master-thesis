@@ -114,7 +114,6 @@ def train_model(config, **kwargs):
         init_next_obs = np.zeros(rollout_base_shape + config["obs_shape"], dtype=np.uint8)
 
         for iteration in tqdm(range(init_iteration, config["total_rollouts"] + 1), disable=not config["verbose"]):
-            print("iteration how many frames", total_states.shape)
 
             total_states = init_states
             total_actions = init_actions
@@ -128,6 +127,7 @@ def train_model(config, **kwargs):
             next_states = init_next_states
             total_next_obs = init_next_obs
             total_next_states = np.zeros(rollout_base_shape + config["obs_shape"], dtype=np.uint8)
+            print("iteration how many frames", total_states.shape)
 
             logger.time_start()
 
