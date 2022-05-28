@@ -114,26 +114,26 @@ class RND:
         total_next_obs = ((total_next_obs - self.state_rms.mean) / (self.state_rms.var ** 0.5)).clip(-5, 5)
         
         
-        train_dataset = TensorDataset(states, actions,
-                                      int_rets, ext_rets, advs, log_probs,
-                                      total_next_obs)
+        # train_dataset = TensorDataset(states, actions,
+        #                               int_rets, ext_rets, advs, log_probs,
+        #                               total_next_obs)
 
 
-        train_loader = torch.utils.data.DataLoader(dataset=train_dataset,
-                                                    batch_size=32,
-                                                    shuffle=False)
+        # train_loader = torch.utils.data.DataLoader(dataset=train_dataset,
+        #                                             batch_size=32,
+        #                                            shuffle=False)
 
-        print("train loader", train_loader.shape)
+        # print("train loader", train_loader.shape)
 
         pg_losses, ext_v_losses, int_v_losses, rnd_losses, entropies = [], [], [], [], []
         for epoch in range(self.config["n_epochs"]):
-            for state, action, int_return, ext_return, adv, old_log_prob, next_state in                     self.choose_mini_batch(states=states,
-                                           actions=actions,
-                                           int_returns=int_rets,
-                                           ext_returns=ext_rets,
-                                           advs=advs,
-                                           log_probs=log_probs,
-                                           next_states=total_next_obs):
+            for state, action, int_return, ext_return, adv, old_log_prob, next_state in self.choose_mini_batch(states=states,
+                                                                                                               actions=actions,
+                                                                                                               int_returns=int_rets,
+                                                                                                               ext_returns=ext_rets,
+                                                                                                               advs=advs,
+                                                                                                               log_probs=log_probs,
+                                                                                                               next_states=total_next_obs):
                 # state.to(self.device)
                 # action.to(self.device)
                 # int_return.to(self.device)
@@ -142,7 +142,7 @@ class RND:
                 # old_log_prob.to(self.device)
                 # next_state.to(self.device)
 
-                print("hi")
+                # print("hi")
                 dist, int_value, ext_value, _ = self.current_policy(state)
                 entropy = dist.entropy().mean()
                 new_log_prob = dist.log_prob(action)

@@ -175,12 +175,12 @@ def train_model(config, **kwargs):
 
 
 
-            n_nodes = 1
-            world_size = n_gpus * n_nodes
-            print(torch.distributed.is_available())
-            print(torch.distributed.is_nccl_available())
+            # n_nodes = 1
+            # world_size = n_gpus * n_nodes
+            # print(torch.distributed.is_available())
+            # print(torch.distributed.is_nccl_available())
 
-            training_logs = agent.train(states=total_states,
+            training_logs = agent.train(states=concatenate(total_states),
                             actions=total_actions,
                             int_rewards=total_int_rewards,
                             ext_rewards=total_ext_rewards,
