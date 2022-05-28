@@ -6,9 +6,9 @@ from torch.distributions.categorical import Categorical
 # from torchsummary import summary
 
 
-def conv_shape(input, kernel_size, stride, padding=0):
-    return (input + 2 * padding - kernel_size) // stride + 1
-
+def conv_shape(input_dims, kernel_size, stride, padding=0):
+    return ((input_dims[0] + 2 * padding - kernel_size) // stride + 1,
+            (input_dims[1] + 2 * padding - kernel_size) // stride + 1)
 
 class PolicyModel(nn.Module, ABC):
     def __init__(self, state_shape, n_actions):
@@ -86,14 +86,12 @@ class TargetModel(nn.Module, ABC):
         self.conv2 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=4, stride=2)
         self.conv3 = nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1)
 
-        conv1_out_w = conv_shape(w, 8, 4)
-        conv1_out_h = conv_shape(h, 8, 4)
-        conv2_out_w = conv_shape(conv1_out_w, 4, 2)
-        conv2_out_h = conv_shape(conv1_out_h, 4, 2)
-        conv3_out_w = conv_shape(conv2_out_w, 3, 1)
-        conv3_out_h = conv_shape(conv2_out_h, 3, 1)
+        color, w, h = state_shape
+        conv1_out_shape = conv_shape((w, h), 8, 4)
+        conv2_out_shape = conv_shape(conv1_out_shape, 4, 2)
+        conv3_out_shape = conv_shape(conv2_out_shape, 3, 1)
 
-        flatten_size = conv3_out_w * conv3_out_h * 64
+        flatten_size = conv3_out_shape[0] * conv3_out_shape[1] * 64
 
         self.encoded_features = nn.Linear(in_features=flatten_size, out_features=512)
 
@@ -121,20 +119,17 @@ class PredictorModel(nn.Module, ABC):
     def __init__(self, state_shape):
         super(PredictorModel, self).__init__()
         self.state_shape = state_shape
-
         c, w, h = state_shape
         self.conv1 = nn.Conv2d(in_channels=c, out_channels=32, kernel_size=8, stride=4)
         self.conv2 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=4, stride=2)
         self.conv3 = nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1)
 
-        conv1_out_w = conv_shape(w, 8, 4)
-        conv1_out_h = conv_shape(h, 8, 4)
-        conv2_out_w = conv_shape(conv1_out_w, 4, 2)
-        conv2_out_h = conv_shape(conv1_out_h, 4, 2)
-        conv3_out_w = conv_shape(conv2_out_w, 3, 1)
-        conv3_out_h = conv_shape(conv2_out_h, 3, 1)
+        color, w, h = state_shape
+        conv1_out_shape = conv_shape((w, h), 8, 4)
+        conv2_out_shape = conv_shape(conv1_out_shape, 4, 2)
+        conv3_out_shape = conv_shape(conv2_out_shape, 3, 1)
 
-        flatten_size = conv3_out_w * conv3_out_h * 64
+        flatten_size = conv3_out_shape[0] * conv3_out_shape[1] * 64
 
         self.fc1 = nn.Linear(in_features=flatten_size, out_features=512)
         self.fc2 = nn.Linear(in_features=512, out_features=512)
