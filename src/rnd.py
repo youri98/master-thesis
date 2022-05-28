@@ -19,6 +19,8 @@ import os
 from torch.utils.data import TensorDataset, DataLoader
 import sys
 
+from torch.distributions.categorical import Categorical
+
 # def setup(rank, world_size):
 #     os.environ['MASTER_ADDR'] = 'localhost'
 #     os.environ['MASTER_PORT'] = '12355'
@@ -87,7 +89,8 @@ class RND:
             output = self.current_policy(state)
             print(output)
 
-            dist, int_value, ext_value, action_prob = output
+            probs, int_value, ext_value, action_prob = output
+            dist = Categorical(probs)
             action = dist.sample()
             log_prob = dist.log_prob(action)
         return action.cpu().numpy(), int_value.cpu().numpy().squeeze(), \
