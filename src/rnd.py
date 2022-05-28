@@ -72,13 +72,15 @@ class RND:
         if not batch:
             state = np.expand_dims(state, 0)
         state = from_numpy(state).to(self.device)
+        print("hddfg")
+        print(state)
 
         with torch.no_grad():
             dataset = TensorDataset(state)
             loader = DataLoader(dataset)
             for state in loader:
                 print(state)
-                input = state.to(self.device)
+                input = state[0].to(self.device)
                 output = self.current_policy(input)
                 print(output)
 
