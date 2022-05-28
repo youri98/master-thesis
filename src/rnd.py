@@ -76,23 +76,15 @@ class RND:
             state = np.expand_dims(state, 0)
         state = from_numpy(state).to(self.device)
 
-        batchsize = 6
-
-        # print(state.shape)
-        # state.view(1, batchsize, *self.state_shape)
-        # print(state.shape)
-
         with torch.no_grad():
-
             print("OUTside", state.shape)
-            state.to(self.device)
             output = self.current_policy(state)
             print(output)
-
-            probs, int_value, ext_value, action_prob = output.mean(1)
-            dist = Categorical(probs)
+            int_value, ext_value, action_prob = output
+            dist = Categorical(action_prob)
             action = dist.sample()
             log_prob = dist.log_prob(action)
+
         return action.cpu().numpy(), int_value.cpu().numpy().squeeze(), \
                ext_value.cpu().numpy().squeeze(), log_prob.cpu().numpy(), action_prob.cpu().numpy()
 
@@ -165,7 +157,9 @@ class RND:
                 # next_state.to(self.device)
 
                 # print("hi")
-                dist, int_value, ext_value, _ = self.current_policy(state)
+                int_value, ext_value, action_prob = self.current_policy(state).mean(1)
+                dist = Categorical(action_prob)
+
                 entropy = dist.entropy().mean()
                 new_log_prob = dist.log_prob(action)
                 ratio = (new_log_prob - old_log_prob).exp()

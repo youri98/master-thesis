@@ -72,10 +72,10 @@ class PolicyModel(nn.Module, ABC):
         ext_value = self.ext_value(x_value)
         policy = self.policy(x_pi)
         probs = F.softmax(policy, dim=1)
-        dist = Categorical(probs)
-        result = torch.cat((probs, int_value, ext_value, probs), dim=1)
+        # dist = Categorical(probs)
+        result = [int_value, ext_value, probs]
 
-        return result
+        return result #probs, int_value, ext_value, probs
 
 class TargetModel(nn.Module, ABC):
 
