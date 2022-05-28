@@ -79,8 +79,8 @@ class RND:
         with torch.no_grad():
 
             for s in state:
+                print(s)
                 s.to(self.device)
-                s.unsqueeze()
                 output = self.current_policy(s)
                 print(output)
 
