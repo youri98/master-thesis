@@ -118,8 +118,6 @@ class RND:
 
         pg_losses, ext_v_losses, int_v_losses, rnd_losses, entropies = [], [], [], [], []
         for epoch in range(self.config["n_epochs"]):
-            torch.cuda.empty_cache() 
-
             for state, action, int_return, ext_return, adv, old_log_prob, next_state in self.choose_mini_batch(states=states,
                                                                                                                actions=actions,
                                                                                                                int_returns=int_rets,
@@ -128,6 +126,8 @@ class RND:
                                                                                                                log_probs=log_probs,
                                                                                                                next_states=total_next_obs):
                 #print("inside batch ", state.shape)
+                torch.cuda.empty_cache() 
+
                 outputs = self.current_policy(state)
                 int_value, ext_value, action_prob = outputs
                 dist = Categorical(action_prob)

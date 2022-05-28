@@ -8,6 +8,11 @@ from torch.multiprocessing import Process, Pipe
 from torch.utils.data import DataLoader
 from torch.nn import DataParallel
 from torch.nn.parallel import DistributedDataParallel
+import os
+from torch.utils.data import TensorDataset, DataLoader
+import sys
+
+from torch.distributions.categorical import Categorical
 
 torch.backends.cudnn.benchmark = True
 
@@ -32,23 +37,23 @@ class APE:
         self.target_model = TargetModel(self.obs_shape, self.encoding_size).to(self.device)
 
 
-        if config["multiple_gpus"]:
-            self.current_policy = DistributedDataParallel(self.current_policy, )
-            self.predictor_model = DistributedDataParallel(self.predictor_model)
-            self.target_model = DistributedDataParallel(self.target_model)
-            self.discriminator = DistributedDataParallel(self.discriminator)
-
         for param in self.target_model.parameters():
             param.requires_grad = False
 
-        self.total_trainable_params = list(self.current_policy.parameters()) + list(self.predictor_model.parameters())
+        self.total_trainable_params = list(self.current_policy.parameters()) + list(self.predictor_model.parameters()) + list(self.discriminator.parameters())
 
-        if self.config["algo"] == "APE":
-            self.total_trainable_params += list(self.discriminator.parameters())
-        
-        # if self.use_decoder:
-        #     self.decoder = DecoderModel()
-        #     self.total_trainable_params += list(self.decoder.parameters())
+
+        self.n_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0 
+
+        if torch.cuda.device_count() > 1 or True:
+            print("Let's use", torch.cuda.device_count(), "GPUs!")
+    
+            self.predictor_model = DataParallel(self.predictor_model)
+            self.current_policy = DataParallel(self.current_policy)
+            self.discriminator = DataParallel(self.discriminator)
+            self.predictor_model.to(self.device)
+            self.current_policy.to(self.device)
+            self.discriminator.to(self.device)
 
         self.optimizer = Adam(self.total_trainable_params, lr=self.config["lr"])
         # consider LBFGS
@@ -62,8 +67,6 @@ class APE:
             param.requires_grad = False
 
 
-    def run_workers_train(worker, conn):
-        worker.step(conn)
 
     def get_gae(self, rewards, values, next_values, dones, gamma):
         lam = self.config["lambda"]  # Make code faster.
@@ -93,12 +96,19 @@ class APE:
         if not batch:
             state = np.expand_dims(state, 0)
         state = torch.from_numpy(state).to(self.device)
+        
+        torch.cuda.empty_cache() 
+
         with torch.no_grad():
-            dist, int_value, ext_value, action_prob = self.current_policy(state)
+            outputs = self.current_policy(state)
+            int_value, ext_value, action_prob = outputs
+            dist = Categorical(action_prob)
             action = dist.sample()
             log_prob = dist.log_prob(action)
+
         return action.cpu().numpy(), int_value.cpu().numpy().squeeze(), \
                ext_value.cpu().numpy().squeeze(), log_prob.cpu().numpy(), action_prob.cpu().numpy()
+
 
     def generate_batches(self, states, next_states, actions, log_probs, advs, int_rets, ext_rets):
         if self.config["algo"] == "APE":
@@ -153,17 +163,15 @@ class APE:
 
         self.state_rms.update(total_next_obs)
         total_next_obs = ((total_next_obs - self.state_rms.mean) / (self.state_rms.var ** 0.5)).clip(-5, 5)
+        
 
-        states = torch.Tensor(states).to(self.device)
-        next_states = torch.Tensor(next_states).to(self.device)
-        actions = torch.Tensor(actions).to(torch.int64).to(self.device)
-        log_probs = torch.Tensor(log_probs).to(self.device)
-        advs = torch.Tensor(advs).to(self.device)
-        int_rets = torch.Tensor(int_rets).to(self.device)
-        ext_rets = torch.Tensor(ext_rets).to(self.device)
+        n_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0 
+        device_ids = [x for x in range(n_gpus)]
 
-        pg_losses, ext_value_losses, int_value_losses, rnd_losses, disc_losses, entropies = [], [], [], [], [], []
+        pg_losses, ext_v_losses, int_v_losses, rnd_losses, entropies, disc_losses = [], [], [], [], [], []
         for epoch in range(self.config["n_epochs"]):
+            torch.cuda.empty_cache() 
+
             for state, action, int_return, ext_return, adv, old_log_prob, next_state in \
                     self.choose_mini_batch(states=states,
                                            actions=actions,
@@ -172,8 +180,10 @@ class APE:
                                            advs=advs,
                                            log_probs=log_probs,
                                            next_states=total_next_obs):
+                outputs = self.current_policy(state)
+                int_value, ext_value, action_prob = outputs
+                dist = Categorical(action_prob)
 
-                dist, int_value, ext_value, _ = self.current_policy(state)
                 entropy = dist.entropy().mean()
                 new_log_prob = dist.log_prob(action)
                 ratio = (new_log_prob - old_log_prob).exp()
@@ -184,10 +194,14 @@ class APE:
 
                 critic_loss = 0.5 * (int_value_loss + ext_value_loss)
 
+                pg_losses.append(pg_loss.item())
+                ext_v_losses.append(ext_value_loss.item())
+                int_v_losses.append(int_value_loss.item())
+                rnd_losses.append(rnd_loss.item())
+                entropies.append(entropy.item())
 
-                if self.config["algo"] == "APE":
-                    action = torch.nn.functional.one_hot(action, num_classes=self.n_actions)
-                    action = action.view(-1, self.timesteps, self.n_actions)
+                action = torch.nn.functional.one_hot(action, num_classes=self.n_actions)
+                action = action.view(-1, self.timesteps, self.n_actions)
                 disc_loss, rnd_loss = self.calculate_loss(next_state, action)
 
                 total_loss = critic_loss + pg_loss - self.config["ent_coeff"] * entropy + rnd_loss + disc_loss
@@ -195,15 +209,15 @@ class APE:
                 self.optimize(total_loss)
 
                 pg_losses.append(pg_loss.item())
-                ext_value_losses.append(ext_value_loss.item())
-                int_value_losses.append(int_value_loss.item())
+                ext_v_losses.append(ext_value_loss.item())
+                int_v_losses.append(int_value_loss.item())
                 rnd_losses.append(rnd_loss.item())
                 if self.config["algo"] == "APE":
                     disc_losses.append(disc_loss.item())
                 entropies.append(entropy.item())
             # https://github.com/openai/random-network-distillation/blob/f75c0f1efa473d5109d487062fd8ed49ddce6634/ppo_agent.py#L187
 
-        return pg_losses, ext_value_losses, int_value_losses, rnd_losses, disc_losses, entropies, advs #, int_values, int_rets, ext_values, ext_rets
+        return pg_losses, ext_v_losses, int_v_losses, rnd_losses, disc_losses, entropies, advs #, int_values, int_rets, ext_values, ext_rets
     
     def calculate_int_rewards(self, next_states, batch=True):
         if not batch:
