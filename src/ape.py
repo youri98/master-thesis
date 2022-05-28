@@ -217,6 +217,7 @@ class APE:
             next_states = np.expand_dims(next_states, 0)
         next_states = np.clip((next_states - self.state_rms.mean) / (self.state_rms.var ** 0.5), -5, 5,
                               dtype="float32")  # dtype to avoid '.float()' call for pytorch.
+        torch.cuda.empty_cache() 
 
 
         next_states = torch.from_numpy(next_states).type(torch.float32).to(self.device)
@@ -250,6 +251,7 @@ class APE:
             return disc_loss.detach().cpu().numpy().reshape((self.config["n_workers"], self.config["rollout_length"]))
 
     def calculate_loss(self, next_state, action): 
+        
         target_encoded_features = self.target_model(next_state.view(-1, *self.obs_shape))
         predictor_encoded_features = self.predictor_model(next_state.view(-1, *self.obs_shape))
 
