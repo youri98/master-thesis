@@ -80,24 +80,24 @@ def train_model(config, **kwargs):
     
     else:
         print("---Pre_normalization started.---")
-        # states = []
-        # total_pre_normalization_steps = config["rollout_length"] * config["pre_normalization_steps"]
-        # actions = np.random.randint(0, config["n_actions"], (total_pre_normalization_steps, config["n_workers"]))
-        # for t in range(total_pre_normalization_steps):
+        states = []
+        total_pre_normalization_steps = config["rollout_length"] * config["pre_normalization_steps"]
+        actions = np.random.randint(0, config["n_actions"], (total_pre_normalization_steps, config["n_workers"]))
+        for t in range(total_pre_normalization_steps):
 
-        #     for worker_id, parent in enumerate(parents):
-        #         parent.recv()  # Only collects next_states for normalization.
+            for worker_id, parent in enumerate(parents):
+                parent.recv()  # Only collects next_states for normalization.
 
-        #     for parent, a in zip(parents, actions[t]):
-        #         parent.send(a)
+            for parent, a in zip(parents, actions[t]):
+                parent.send(a)
 
-        #     for parent in parents:
-        #         s_, *_ = parent.recv()
-        #         states.append(s_[-1, ...].reshape(1, 84, 84))
+            for parent in parents:
+                s_, *_ = parent.recv()
+                states.append(s_[-1, ...].reshape(1, 84, 84))
 
-        #     if len(states) % (config["n_workers"] * config["rollout_length"]) == 0:
-        #         agent.state_rms.update(np.stack(states))
-        #         states = []
+            if len(states) % (config["n_workers"] * config["rollout_length"]) == 0:
+                agent.state_rms.update(np.stack(states))
+                states = []
         print("---Pre_normalization is done.---")
 
         rollout_base_shape = config["n_workers"], config["rollout_length"]
@@ -133,7 +133,6 @@ def train_model(config, **kwargs):
             logger.time_start()
 
             for t in range(config["rollout_length"]):
-                torch.cuda.empty_cache() 
 
                 for worker_id, parent in enumerate(parents):
                     total_states[worker_id, t] = parent.recv()
@@ -191,7 +190,7 @@ def train_model(config, **kwargs):
                             total_next_obs=total_next_obs)
 
             logger.time_stop("training time")
-            n_frames = total_states.shape[0] * total_states.shape[1] * (iteration + 1)
+            n_frames = total_states.shape[0] * total_states.shape[1] * total_states.shape[2] * (iteration + 1)
             logger.time_start()
             logger.log_iteration(iteration,
                                     n_frames,
