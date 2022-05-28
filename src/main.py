@@ -78,7 +78,7 @@ def train_model(config, **kwargs):
         pass
     
     else:
-        # print("---Pre_normalization started.---")
+        print("---Pre_normalization started.---")
         # states = []
         # total_pre_normalization_steps = config["rollout_length"] * config["pre_normalization_steps"]
         # actions = np.random.randint(0, config["n_actions"], (total_pre_normalization_steps, config["n_workers"]))
@@ -97,7 +97,7 @@ def train_model(config, **kwargs):
         #     if len(states) % (config["n_workers"] * config["rollout_length"]) == 0:
         #         agent.state_rms.update(np.stack(states))
         #         states = []
-        # print("---Pre_normalization is done.---")
+        print("---Pre_normalization is done.---")
 
         rollout_base_shape = config["n_workers"], config["rollout_length"]
 
@@ -114,6 +114,7 @@ def train_model(config, **kwargs):
         init_next_obs = np.zeros(rollout_base_shape + config["obs_shape"], dtype=np.uint8)
 
         for iteration in tqdm(range(init_iteration, config["total_rollouts"] + 1), disable=not config["verbose"]):
+            print("iteration how many frames", total_states.shape)
 
             total_states = init_states
             total_actions = init_actions
@@ -172,11 +173,7 @@ def train_model(config, **kwargs):
 
             total_int_rewards = agent.normalize_int_rewards(total_int_rewards)
             
-            n_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0 
 
-
-
-            print("iteration how many frames", total_states.shape)
 
             training_logs = agent.train(states=concatenate(total_states),
                             actions=total_actions,
