@@ -46,7 +46,7 @@ class RND:
     
             self.predictor_model = DataParallel(self.predictor_model)
             self.current_policy = DataParallel(self.current_policy)
-            self.target_model = DataParallel(self.current_policy)
+            self.target_model = DataParallel(self.target_model)
             self.target_model.to(self.device)
             self.predictor_model.to(self.device)
             self.current_policy.to(self.device)
