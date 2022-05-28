@@ -223,7 +223,7 @@ def train_model(config, **kwargs):
 if __name__ == '__main__':
     #delete_files()
     config = get_params()
-    config["algo"] = "APE"
+    config["algo"] = "RND"
 
     # # run 1
     # config["env"] = "VentureNoFrameskip-v4"

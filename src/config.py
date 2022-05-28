@@ -39,7 +39,7 @@ def get_params():
                       "max_frames_per_episode": 4500,  # 4500 * 4 = 18K :D
                       "rollout_length": 128,
                       "n_epochs": 4,
-                      "n_mini_batch": 32,
+                      "n_mini_batch": 16,
                       "lr": 1e-4,
                       "ext_gamma": 0.999,
                       "int_gamma": 0.99,
