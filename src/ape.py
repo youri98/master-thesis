@@ -193,7 +193,8 @@ class APE:
                 ext_value_loss = self.mse_loss(ext_value.squeeze(-1), ext_return)
 
                 critic_loss = 0.5 * (int_value_loss + ext_value_loss)
-
+                
+                actions = torch.from_numpy(actions).to(torch.int64).to(self.device)
                 action = torch.nn.functional.one_hot(action, num_classes=self.n_actions)
                 action = action.view(-1, self.timesteps, self.n_actions)
                 disc_loss, rnd_loss = self.calculate_loss(next_state, action)
