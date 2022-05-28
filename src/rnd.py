@@ -51,8 +51,8 @@ class RND:
             print("Let's use", torch.cuda.device_count(), "GPUs!")
             # dim = 0 [30, xxx] -> [10, ...], [10, ...], [10, ...] on 3 GPUs
     
-            # self.predictor_model = DataParallel(self.predictor_model).to(self.device)
-            # self.current_policy = DataParallel(self.current_policy).to(self.device)
+            self.predictor_model = DataParallel(self.predictor_model).to(self.device)
+            self.current_policy = DataParallel(self.current_policy).to(self.device)
             
             # os.environ['MASTER_ADDR'] = '192.168.1.3'
             # os.environ['MASTER_PORT'] = '8888'
