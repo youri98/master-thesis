@@ -73,7 +73,7 @@ class PolicyModel(nn.Module, ABC):
         policy = self.policy(x_pi)
         probs = F.softmax(policy, dim=1)
         dist = Categorical(probs)
-        result = torch.cat((dist, int_value, ext_value, probs), dim=1)
+        result = torch.cat((probs, int_value, ext_value, probs), dim=1)
 
         return result
 
