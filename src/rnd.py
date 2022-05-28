@@ -47,9 +47,12 @@ class RND:
 
         n_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0 
 
-        if gpu:
-            self.predictor_model = DataParallel(self.predictor_model, device_ids=[x for x in range(n_gpus)])
-            self.current_policy = DataParallel(self.current_policy, device_ids=[x for x in range(n_gpus)])
+        if torch.cuda.device_count() > 1:
+            print("Let's use", torch.cuda.device_count(), "GPUs!")
+            # dim = 0 [30, xxx] -> [10, ...], [10, ...], [10, ...] on 3 GPUs
+    
+            self.predictor_model = DataParallel(self.predictor_model).to(self.device)
+            self.current_policy = DataParallel(self.current_policy).to(self.device)
             
             # os.environ['MASTER_ADDR'] = '192.168.1.3'
             # os.environ['MASTER_PORT'] = '8888'
@@ -95,6 +98,7 @@ class RND:
         
 
 
+
         int_rets = self.get_gae(int_rewards, int_values, next_int_values,
                                 np.zeros_like(dones), self.config["int_gamma"])
         ext_rets = self.get_gae(ext_rewards, ext_values, next_ext_values,
@@ -121,11 +125,19 @@ class RND:
                                                     batch_size=32,
                                                     shuffle=False)
 
-        print(train_loader.shape)
+        print("train loader", train_loader.shape)
 
         pg_losses, ext_v_losses, int_v_losses, rnd_losses, entropies = [], [], [], [], []
         for epoch in range(self.config["n_epochs"]):
             for state, action, int_return, ext_return, adv, old_log_prob, next_state in train_loader:
+                state.to(self.device)
+                action.to(self.device)
+                int_return.to(self.device)
+                ext_return.to(self.device)
+                adv.to(self.device)
+                old_log_prob.to(self.device)
+                next_state.to(self.device)
+
                 print("hi")
                 dist, int_value, ext_value, _ = self.current_policy(state)
                 entropy = dist.entropy().mean()
