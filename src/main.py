@@ -114,6 +114,7 @@ def train_model(config, **kwargs):
         init_next_obs = np.zeros(rollout_base_shape + config["obs_shape"], dtype=np.uint8)
 
         for iteration in tqdm(range(init_iteration, config["total_rollouts"] + 1), disable=not config["verbose"]):
+
             total_states = init_states
             total_actions = init_actions
             total_action_probs =init_action_probs
@@ -175,10 +176,7 @@ def train_model(config, **kwargs):
 
 
 
-            # n_nodes = 1
-            # world_size = n_gpus * n_nodes
-            # print(torch.distributed.is_available())
-            # print(torch.distributed.is_nccl_available())
+            print("iteration how many frames", total_states.shape)
 
             training_logs = agent.train(states=concatenate(total_states),
                             actions=total_actions,
