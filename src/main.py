@@ -24,6 +24,7 @@ def run_workers_env_step(worker, conn):
     worker.step(conn)
 
 def train_model(config, **kwargs):
+    print("STARTED")
     with open("key.txt", "r") as personal_key:
         if personal_key is not None:
             os.environ["WANDB_API_KEY"] = personal_key.read().strip()

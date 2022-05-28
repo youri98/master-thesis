@@ -123,7 +123,7 @@ class RND:
                                                                                                                advs=advs,
                                                                                                                log_probs=log_probs,
                                                                                                                next_states=total_next_obs):
-                print(state.shape)
+                print("inside batch ", state.shape)
                 outputs = self.current_policy(state)
                 int_value, ext_value, action_prob = outputs
                 dist = Categorical(action_prob)

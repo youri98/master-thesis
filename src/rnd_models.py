@@ -63,7 +63,7 @@ class PolicyModel(nn.Module, ABC):
 
     def forward(self, state):
         #state = np.divide(state, 255., out=state, casting="unsafe")
-        print("Inside ", state.shape)
+        # print("Inside ", state.shape)
         x = state / 255.
         x = self.seq(x)
         x_value = x + F.relu(self.extra_value_fc(x))
