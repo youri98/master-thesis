@@ -76,21 +76,20 @@ class RND:
 
         batchsize = 6
 
-        print(state.shape)
-        state.view(-1, batchsize, *self.state_shape)
-        print(state.shape)
+        # print(state.shape)
+        # state.view(1, batchsize, *self.state_shape)
+        # print(state.shape)
 
         with torch.no_grad():
 
-            for s in state:
-                print("OUTside", s.shape)
-                s.to(self.device)
-                output = self.current_policy(s)
-                print(output)
+            print("OUTside", state.shape)
+            state.to(self.device)
+            output = self.current_policy(state)
+            print(output)
 
-                dist, int_value, ext_value, action_prob = output
-                action = dist.sample()
-                log_prob = dist.log_prob(action)
+            dist, int_value, ext_value, action_prob = output
+            action = dist.sample()
+            log_prob = dist.log_prob(action)
         return action.cpu().numpy(), int_value.cpu().numpy().squeeze(), \
                ext_value.cpu().numpy().squeeze(), log_prob.cpu().numpy(), action_prob.cpu().numpy()
 
