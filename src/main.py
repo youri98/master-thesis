@@ -189,9 +189,8 @@ def train_model(config, **kwargs):
             world_size = n_gpus * n_nodes
             print(torch.distributed.is_available())
             print(torch.distributed.is_nccl_available())
-            training_logs = mp.spawn(agent.train, nprocs=n_gpus, args=(world_size, *train_args))
 
-            # training_logs = agent.train(args)
+            training_logs = agent.train(*train_args)
 
             logger.time_stop("training time")
 
