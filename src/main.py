@@ -100,7 +100,7 @@ def train_model(config, **kwargs):
         #         states = []
         # print("---Pre_normalization is done.---")
 
-        rollout_base_shape = config["n_workers"], config["rollout_length"]
+        rollout_base_shape = config["n_workers"]//4, config["rollout_length"]
 
         init_states = np.zeros(rollout_base_shape + config["state_shape"], dtype=np.uint8)
         init_actions = np.zeros(rollout_base_shape, dtype=np.uint8)
