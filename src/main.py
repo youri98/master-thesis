@@ -173,24 +173,24 @@ def train_model(config, **kwargs):
             
             n_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0 
 
-            train_args = (concatenate(total_states),
-                                        total_actions,
-                                        total_int_rewards,
-                                        total_ext_rewards,
-                                        total_dones,
-                                        total_int_values,
-                                        total_ext_values,
-                                        concatenate(total_log_probs),
-                                        next_int_values,
-                                        next_ext_values,
-                                        total_next_obs)
+
 
             n_nodes = 1
             world_size = n_gpus * n_nodes
             print(torch.distributed.is_available())
             print(torch.distributed.is_nccl_available())
 
-            training_logs = agent.train(*train_args)
+            training_logs = agent.train(states=total_states,
+                            actions=total_actions,
+                            int_rewards=total_int_rewards,
+                            ext_rewards=total_ext_rewards,
+                            dones=total_dones,
+                            int_values=total_int_values,
+                            ext_values=total_ext_values,
+                            log_probs=concatenate(total_log_probs),
+                            next_int_values=next_int_values,
+                            next_ext_values=next_ext_values,
+                            total_next_obs=total_next_obs)
 
             logger.time_stop("training time")
 

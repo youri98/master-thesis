@@ -127,14 +127,20 @@ class RND:
 
         pg_losses, ext_v_losses, int_v_losses, rnd_losses, entropies = [], [], [], [], []
         for epoch in range(self.config["n_epochs"]):
-            for state, action, int_return, ext_return, adv, old_log_prob, next_state in train_loader:
-                state.to(self.device)
-                action.to(self.device)
-                int_return.to(self.device)
-                ext_return.to(self.device)
-                adv.to(self.device)
-                old_log_prob.to(self.device)
-                next_state.to(self.device)
+            for state, action, int_return, ext_return, adv, old_log_prob, next_state in                     self.choose_mini_batch(states=states,
+                                           actions=actions,
+                                           int_returns=int_rets,
+                                           ext_returns=ext_rets,
+                                           advs=advs,
+                                           log_probs=log_probs,
+                                           next_states=total_next_obs):
+                # state.to(self.device)
+                # action.to(self.device)
+                # int_return.to(self.device)
+                # ext_return.to(self.device)
+                # adv.to(self.device)
+                # old_log_prob.to(self.device)
+                # next_state.to(self.device)
 
                 print("hi")
                 dist, int_value, ext_value, _ = self.current_policy(state)
