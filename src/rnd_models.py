@@ -4,7 +4,7 @@ from torch import nn
 from torch.nn import functional as F
 from torch.distributions.categorical import Categorical
 # from torchsummary import summary
-
+import torch
 
 def conv_shape(input_dims, kernel_size, stride, padding=0):
     return ((input_dims[0] + 2 * padding - kernel_size) // stride + 1,
@@ -73,8 +73,9 @@ class PolicyModel(nn.Module, ABC):
         policy = self.policy(x_pi)
         probs = F.softmax(policy, dim=1)
         dist = Categorical(probs)
+        result = torch.cat((dist, int_value, ext_value, probs), dim=1)
 
-        return dist, int_value, ext_value, probs
+        return result
 
 class TargetModel(nn.Module, ABC):
 
