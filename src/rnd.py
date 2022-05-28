@@ -89,7 +89,7 @@ class RND:
             output = self.current_policy(state)
             print(output)
 
-            probs, int_value, ext_value, action_prob = output
+            probs, int_value, ext_value, action_prob = output.mean(1)
             dist = Categorical(probs)
             action = dist.sample()
             log_prob = dist.log_prob(action)
