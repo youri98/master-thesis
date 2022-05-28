@@ -153,7 +153,7 @@ class RND:
                 rnd_losses.append(rnd_loss.item())
                 entropies.append(entropy.item())
                 # https://github.com/openai/random-network-distillation/blob/f75c0f1efa473d5109d487062fd8ed49ddce6634/ppo_agent.py#L187
-        return np.array(pg_losses).mean(), np.array(ext_v_losses).mean(), np.array(int_v_losses).mean(), np.array(rnd_losses).mean(), np.array(entropies).mean()
+        return np.array(pg_losses).mean(), np.array(ext_v_losses).mean(), np.array(int_v_losses).mean(), np.array(rnd_losses).mean(), np.array(entropies).mean(), np.mean(advs)
 
     def optimize(self, loss):
         self.optimizer.zero_grad()

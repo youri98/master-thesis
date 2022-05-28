@@ -1,4 +1,4 @@
-from ape_models import PolicyModel, PredictorModel, TargetModel, DiscriminatorModel
+from ape_models import PolicyModel, PredictorModel, TargetModel, DiscriminatorModel, DiscriminatorModelGRU
 import torch
 import numpy as np
 from torch.optim.adam import Adam
@@ -65,8 +65,6 @@ class APE:
 
         for param in self.target_model.parameters():
             param.requires_grad = False
-
-
 
     def get_gae(self, rewards, values, next_values, dones, gamma):
         lam = self.config["lambda"]  # Make code faster.
@@ -143,7 +141,7 @@ class APE:
         for idx in indices:
             yield states[idx], actions[idx], int_returns[idx], ext_returns[idx], advs[idx], \
                   log_probs[idx], next_states[idx]
-    #@mean_of_list
+
     def train(self, states, actions, int_rewards,
               ext_rewards, dones, int_values, ext_values,
               log_probs, next_int_values, next_ext_values, total_next_obs):
@@ -194,7 +192,7 @@ class APE:
 
                 critic_loss = 0.5 * (int_value_loss + ext_value_loss)
                 
-                actions = torch.from_numpy(actions).to(torch.int64).to(self.device)
+                action = action.to(torch.int64).to(self.device)
                 action = torch.nn.functional.one_hot(action, num_classes=self.n_actions)
                 action = action.view(-1, self.timesteps, self.n_actions)
                 disc_loss, rnd_loss = self.calculate_loss(next_state, action)
@@ -211,23 +209,8 @@ class APE:
                 entropies.append(entropy.item())
             # https://github.com/openai/random-network-distillation/blob/f75c0f1efa473d5109d487062fd8ed49ddce6634/ppo_agent.py#L187
 
-        return pg_losses, ext_v_losses, int_v_losses, rnd_losses, disc_losses, entropies, advs #, int_values, int_rets, ext_values, ext_rets
+        return np.mean(pg_losses), np.mean(ext_v_losses), np.mean(int_v_losses), np.mean(rnd_losses), np.mean(disc_losses), np.mean(entropies), np.mean(advs) #, int_values, int_rets, ext_values, ext_rets
     
-    # def calculate_int_rewards(self, next_states, batch=True):
-    #     if not batch:
-    #         next_states = np.expand_dims(next_states, 0)
-    #     next_states = np.clip((next_states - self.state_rms.mean) / (self.state_rms.var ** 0.5), -5, 5,
-    #                           dtype="float32")  # dtype to avoid '.float()' call for pytorch.
-    #     next_states = torch.from_numpy(next_states).to(self.device)
-        
-    #     predictor_encoded_features = self.predictor_model(next_states)
-    #     target_encoded_features = self.target_model(next_states)
-
-    #     int_reward = (predictor_encoded_features - target_encoded_features).pow(2).mean(1)
-    #     if not batch:
-    #         return int_reward.detach().cpu().numpy()
-    #     else:
-    #         return int_reward.detach().cpu().numpy().reshape((self.config["n_workers"], self.config["rollout_length"]))
 
     def calculate_int_rewards(self, next_states, actions, batch=True):
         if not batch:
@@ -278,9 +261,6 @@ class APE:
         mask = torch.rand(rnd_loss.size(), device=self.device).to(self.device)
         mask = (mask < self.config["predictor_proportion"]).float()
         rnd_loss = (mask * rnd_loss).sum() / torch.max(mask.sum(), torch.Tensor([1]).to(self.device))
-
-        if self.config["algo"] == "RND":
-            return 0, rnd_loss
 
         mask = torch.randint(0, 2, size=(*predictor_encoded_features.shape[:-1], self.pred_size)).to(self.device)
         mask_inv = torch.where((mask==0)|(mask==1), mask^1, mask).to(self.device)

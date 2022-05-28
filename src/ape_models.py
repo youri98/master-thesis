@@ -105,7 +105,6 @@ class TargetModel(nn.Module, ABC):
     def forward(self, state):
         return self.seq(state)
 
-
 class PredictorModel(nn.Module, ABC):
     def __init__(self, state_shape, encoding_size):
         super(PredictorModel, self).__init__()
@@ -178,6 +177,46 @@ class DiscriminatorModel(nn.Module, ABC):
 
         return output
 
+
+
+class DiscriminatorModelGRU(nn.Module, ABC):
+    def __init__(self, encoding_size, hidden_layers=128, timesteps=8, n_layers=3, pred_size=1, n_actions=18):
+        super(DiscriminatorModelGRU, self).__init__()
+
+        self.timesteps = timesteps
+        self.hidden_layers = hidden_layers
+        self.n_layers = n_layers
+        self.n_actions = n_actions
+        self.device =  torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+
+        self.rnn = nn.GRUCell(encoding_size + n_actions, self.hidden_layers).to(self.device)
+        self.h = torch.randn((self.hidden_layers), dtype=torch.float32).to(self.device)
+
+        self.fc = nn.Sequential(
+            nn.Linear(self.hidden_layers, 256),
+            nn.ReLU(),
+            nn.Linear(256, pred_size),
+            nn.Sigmoid()
+        ).to(self.device)
+
+    #@autocast(device_type="cpu")
+    def forward(self, rand_encoding, actions, true_encoding):
+        input_t = torch.cat((rand_encoding, actions), dim=-1)
+        true_input_t = torch.cat((true_encoding, actions), dim=-1)
+
+        input_t = input_t.view(input_t.shape[0]*input_t.shape[1], input_t.shape[-1])
+        true_input_t = true_input_t.view(true_input_t.shape[0]*true_input_t.shape[1], true_input_t.shape[-1])
+
+        outputs = torch.zeros(len(input_t))
+    
+        for i in range(len(input_t)):
+            h = self.rnn(input_t[i], self.h)
+            outputs[i] = self.fc(h)
+
+            with torch.no_grad():
+                self.h = self.rnn(true_input_t[i], self.h)
+
+        return outputs
 
 
 

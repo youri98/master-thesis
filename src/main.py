@@ -128,7 +128,7 @@ def train_model(config, **kwargs):
             next_states = init_next_states
             total_next_obs = init_next_obs
             total_next_states = np.zeros(rollout_base_shape + config["obs_shape"], dtype=np.uint8)
-            print("iteration how many frames", total_states.shape)
+            # print("iteration how many frames", total_states.shape)
 
             logger.time_start()
 
