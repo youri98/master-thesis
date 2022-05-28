@@ -52,9 +52,11 @@ class RND:
             print("Let's use", torch.cuda.device_count(), "GPUs!")
             # dim = 0 [30, xxx] -> [10, ...], [10, ...], [10, ...] on 3 GPUs
     
-            self.predictor_model = DataParallel(self.predictor_model, device_ids=device_ids)
-            self.current_policy = DataParallel(self.current_policy, device_ids=device_ids)
-            
+            self.predictor_model = DataParallel(self.predictor_model)
+            self.current_policy = DataParallel(self.current_policy)
+            self.predictor_model.to(self.device)
+            self.current_policy.to(self.device)
+
             # os.environ['MASTER_ADDR'] = '192.168.1.3'
             # os.environ['MASTER_PORT'] = '8888'
 
@@ -70,12 +72,19 @@ class RND:
         if not batch:
             state = np.expand_dims(state, 0)
         state = from_numpy(state).to(self.device)
+
         with torch.no_grad():
-            print(state)
-            output = self.current_policy(state)
-            dist, int_value, ext_value, action_prob = output
-            action = dist.sample()
-            log_prob = dist.log_prob(action)
+            dataset = TensorDataset(state)
+            loader = DataLoader(dataset)
+            for state in loader:
+                print(state)
+                input = state.to(self.device)
+                output = self.current_policy(input)
+                print(output)
+
+                dist, int_value, ext_value, action_prob = output
+                action = dist.sample()
+                log_prob = dist.log_prob(action)
         return action.cpu().numpy(), int_value.cpu().numpy().squeeze(), \
                ext_value.cpu().numpy().squeeze(), log_prob.cpu().numpy(), action_prob.cpu().numpy()
 
