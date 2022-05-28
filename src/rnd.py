@@ -46,8 +46,8 @@ class RND:
         for param in self.target_model.parameters():
             param.requires_grad = False
 
-        n_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0 
-        device_ids = [x for x in range(n_gpus)]
+        self.n_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0 
+        device_ids = [x for x in range(self.n_gpus)]
 
         if torch.cuda.device_count() > 1 or True:
             print("Let's use", torch.cuda.device_count(), "GPUs!")
