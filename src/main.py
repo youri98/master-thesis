@@ -131,9 +131,10 @@ def train_model(config, **kwargs):
             print("iteration how many frames", total_states.shape)
 
             logger.time_start()
-            torch.cuda.empty_cache() 
 
             for t in range(config["rollout_length"]):
+                torch.cuda.empty_cache() 
+
                 for worker_id, parent in enumerate(parents):
                     total_states[worker_id, t] = parent.recv()
 
