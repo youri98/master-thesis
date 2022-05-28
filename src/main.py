@@ -189,13 +189,14 @@ def train_model(config, **kwargs):
                             total_next_obs=total_next_obs)
 
             logger.time_stop("training time")
-
+            n_frames = total_states.shape[0] * total_states.shape[1] * (iteration + 1)
             logger.time_start()
             logger.log_iteration(iteration,
+                                    n_frames,
                                     training_logs,
                                     total_int_rewards[0].mean(),
                                     total_ext_rewards[0].mean(),
-                                    total_action_probs[0].max(-1).mean(),
+                                    total_action_probs[0].max(-1).mean()
                                     )
             
             recording = np.stack(recording)
