@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
-
+from rnd_models import PolicyModel
 # Parameters and DataLoaders
 input_size = 5
 output_size = 2
@@ -37,15 +37,19 @@ class Model(nn.Module):
               "output size", output.size())
 
         return output
+state_shape, n_actions = (4, 84, 84), 18
 
-model = Model(input_size, output_size)
+dataset = torch.rand((8, 32, 4, 84, 84))
+
+model = PolicyModel(state_shape, n_actions)
 if torch.cuda.device_count() > 1:
   print("Let's use", torch.cuda.device_count(), "GPUs!")
   # dim = 0 [30, xxx] -> [10, ...], [10, ...], [10, ...] on 3 GPUs
   model = nn.DataParallel(model)
 
 model.to(device)
-for data in rand_loader:
+for data in dataset:
+
     input = data.to(device)
     output = model(input)
     print("Outside: input size", input.size(),

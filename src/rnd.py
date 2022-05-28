@@ -38,6 +38,7 @@ class RND:
         self.mini_batch_size = self.config["batch_size"]
         self.device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
         self.obs_shape = self.config["obs_shape"]
+        self.state_shape = self.config["state_shape"]
 
         self.current_policy = PolicyModel(self.config["state_shape"], self.config["n_actions"]).to(self.device)
         self.predictor_model = PredictorModel(self.obs_shape).to(self.device)
@@ -48,7 +49,7 @@ class RND:
         n_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0 
         device_ids = [x for x in range(n_gpus)]
 
-        if torch.cuda.device_count() > 1:
+        if torch.cuda.device_count() > 1 or True:
             print("Let's use", torch.cuda.device_count(), "GPUs!")
             # dim = 0 [30, xxx] -> [10, ...], [10, ...], [10, ...] on 3 GPUs
     
@@ -72,16 +73,15 @@ class RND:
         if not batch:
             state = np.expand_dims(state, 0)
         state = from_numpy(state).to(self.device)
-        print("hddfg")
-        print(state)
+
+        state.view(self.n_gpus, -1, self.state_shape)
 
         with torch.no_grad():
-            dataset = TensorDataset(state)
-            loader = DataLoader(dataset)
-            for state in loader:
-                print(state)
-                input = state[0].to(self.device)
-                output = self.current_policy(input)
+
+            for s in state:
+                s.to(self.device)
+                s.unsqueeze()
+                output = self.current_policy(s)
                 print(output)
 
                 dist, int_value, ext_value, action_prob = output

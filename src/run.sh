@@ -11,4 +11,4 @@ module load python3
 module load cuda10.2/toolkit/10.2.89
 module load mpi
 
-python run_on_hpc.py --total_rollouts 15000 --record --algo RND
+python run_on_hpc.py --total_rollouts 150 --record --algo RND

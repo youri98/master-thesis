@@ -78,26 +78,26 @@ def train_model(config, **kwargs):
         pass
     
     else:
-        print("---Pre_normalization started.---")
-        states = []
-        total_pre_normalization_steps = config["rollout_length"] * config["pre_normalization_steps"]
-        actions = np.random.randint(0, config["n_actions"], (total_pre_normalization_steps, config["n_workers"]))
-        for t in range(total_pre_normalization_steps):
+        # print("---Pre_normalization started.---")
+        # states = []
+        # total_pre_normalization_steps = config["rollout_length"] * config["pre_normalization_steps"]
+        # actions = np.random.randint(0, config["n_actions"], (total_pre_normalization_steps, config["n_workers"]))
+        # for t in range(total_pre_normalization_steps):
 
-            for worker_id, parent in enumerate(parents):
-                parent.recv()  # Only collects next_states for normalization.
+        #     for worker_id, parent in enumerate(parents):
+        #         parent.recv()  # Only collects next_states for normalization.
 
-            for parent, a in zip(parents, actions[t]):
-                parent.send(a)
+        #     for parent, a in zip(parents, actions[t]):
+        #         parent.send(a)
 
-            for parent in parents:
-                s_, *_ = parent.recv()
-                states.append(s_[-1, ...].reshape(1, 84, 84))
+        #     for parent in parents:
+        #         s_, *_ = parent.recv()
+        #         states.append(s_[-1, ...].reshape(1, 84, 84))
 
-            if len(states) % (config["n_workers"] * config["rollout_length"]) == 0:
-                agent.state_rms.update(np.stack(states))
-                states = []
-        print("---Pre_normalization is done.---")
+        #     if len(states) % (config["n_workers"] * config["rollout_length"]) == 0:
+        #         agent.state_rms.update(np.stack(states))
+        #         states = []
+        # print("---Pre_normalization is done.---")
 
         rollout_base_shape = config["n_workers"], config["rollout_length"]
 
