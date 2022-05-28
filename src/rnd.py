@@ -74,12 +74,16 @@ class RND:
             state = np.expand_dims(state, 0)
         state = from_numpy(state).to(self.device)
 
-        state.view(self.n_gpus, -1, *self.state_shape)
+        batchsize = 6
+
+        print(state.shape)
+        state.view(-1, batchsize, *self.state_shape)
+        print(state.shape)
 
         with torch.no_grad():
 
             for s in state:
-                print(s)
+                print("OUTside", s.shape)
                 s.to(self.device)
                 output = self.current_policy(s)
                 print(output)
