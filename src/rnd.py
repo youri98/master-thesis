@@ -78,6 +78,7 @@ class RND:
 
         with torch.no_grad():
             outputs = self.current_policy(state)
+            print(outputs, outputs.shape)
             output = np.array([output.cpu().numpy() for output in outputs])
             int_value, ext_value, action_prob = np.mean(output, axis=0)
             print(int_value, ext_value, action_prob)
