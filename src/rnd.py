@@ -21,16 +21,6 @@ import sys
 
 from torch.distributions.categorical import Categorical
 
-# def setup(rank, world_size):
-#     os.environ['MASTER_ADDR'] = 'localhost'
-#     os.environ['MASTER_PORT'] = '12355'
-
-#     # initialize the process group
-#     torch.dist.init_process_group("nccl", rank=rank, world_size=world_size)
-
-# def cleanup():
-#     torch.dist.destroy_process_group()
-
 torch.backends.cudnn.benchmark = True
 gpu = True
 
@@ -82,7 +72,6 @@ class RND:
             dist = Categorical(action_prob)
             action = dist.sample()
             log_prob = dist.log_prob(action)
-            print("hi")
 
         return action.cpu().numpy(), int_value.cpu().numpy().squeeze(), \
                ext_value.cpu().numpy().squeeze(), log_prob.cpu().numpy(), action_prob.cpu().numpy()
@@ -124,17 +113,7 @@ class RND:
         self.state_rms.update(total_next_obs)
         total_next_obs = ((total_next_obs - self.state_rms.mean) / (self.state_rms.var ** 0.5)).clip(-5, 5)
         
-        
-        # train_dataset = TensorDataset(states, actions,
-        #                               int_rets, ext_rets, advs, log_probs,
-        #                               total_next_obs)
 
-
-        # train_loader = torch.utils.data.DataLoader(dataset=train_dataset,
-        #                                             batch_size=32,
-        #                                            shuffle=False)
-
-        # print("train loader", train_loader.shape)
         n_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0 
         device_ids = [x for x in range(n_gpus)]
 
@@ -147,16 +126,9 @@ class RND:
                                                                                                                advs=advs,
                                                                                                                log_probs=log_probs,
                                                                                                                next_states=total_next_obs):
-                # state.to(self.device)
-                # action.to(self.device)
-                # int_return.to(self.device)
-                # ext_return.to(self.device)
-                # adv.to(self.device)
-                # old_log_prob.to(self.device)
-                # next_state.to(self.device)
 
-                # print("hi")
-                int_value, ext_value, action_prob = self.current_policy(state).mean(1)
+                outputs = self.current_policy(state)
+                int_value, ext_value, action_prob = outputs
                 dist = Categorical(action_prob)
 
                 entropy = dist.entropy().mean()
