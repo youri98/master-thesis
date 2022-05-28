@@ -42,7 +42,7 @@ class Logger:
         if self.config["mode"] == "train_from_scratch":
             self.create_model_folder()
 
-        scoreskeys = ["Iteration", "Visited Rooms", "Action Probability", "Intrinsic Reward", "PG Loss", "Discriminator Loss",
+        scoreskeys = ["Iteration", "N Frames", "Visited Rooms", "Action Probability", "Intrinsic Reward", "PG Loss", "Discriminator Loss",
                       "Ext Value Loss",  "Int Value Loss", "Advantage", "RND Loss", "Entrinsic Reward", "Entropy", "Recording"]
         self.scores = {k: [] for k in scoreskeys}
 
@@ -105,7 +105,7 @@ class Logger:
 
     def save_score_to_json(self):
         with open("Models/" + self.log_dir + '/scores.json', 'w') as file:
-            norm_scores = {k: (v if k in ["Discriminator Loss", "Visited Rooms", "Iteration", "Recording"] or np.linalg.norm(v) == 0 else (v/np.linalg.norm(v)).tolist()) for k,v in self.scores.items()}
+            norm_scores = {k: (v if k in ["N Frames", "Discriminator Loss", "Visited Rooms", "Iteration", "Recording"] or np.linalg.norm(v) == 0 else (v/np.linalg.norm(v)).tolist()) for k,v in self.scores.items()}
 
 
             file.write(json.dumps(norm_scores))
