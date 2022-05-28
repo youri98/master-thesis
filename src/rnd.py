@@ -63,7 +63,7 @@ class RND:
             state = np.expand_dims(state, 0)
         state = from_numpy(state).to(self.device)
 
-        #torch.cuda.empty_cache() 
+        torch.cuda.empty_cache() 
         with torch.no_grad():
             outputs = self.current_policy(state)
             int_value, ext_value, action_prob = outputs
