@@ -71,6 +71,7 @@ class RND:
             state = np.expand_dims(state, 0)
         state = from_numpy(state).to(self.device)
         with torch.no_grad():
+            print(state)
             output = self.current_policy(state)
             dist, int_value, ext_value, action_prob = output
             action = dist.sample()
