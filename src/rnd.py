@@ -46,13 +46,14 @@ class RND:
             param.requires_grad = False
 
         n_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0 
+        device_ids = [x for x in range(n_gpus)]
 
         if torch.cuda.device_count() > 1:
             print("Let's use", torch.cuda.device_count(), "GPUs!")
             # dim = 0 [30, xxx] -> [10, ...], [10, ...], [10, ...] on 3 GPUs
     
-            self.predictor_model = DataParallel(self.predictor_model).to(self.device)
-            self.current_policy = DataParallel(self.current_policy).to(self.device)
+            self.predictor_model = DataParallel(self.predictor_model, device_ids=device_ids)
+            self.current_policy = DataParallel(self.current_policy, device_ids=device_ids)
             
             # os.environ['MASTER_ADDR'] = '192.168.1.3'
             # os.environ['MASTER_PORT'] = '8888'
@@ -70,7 +71,8 @@ class RND:
             state = np.expand_dims(state, 0)
         state = from_numpy(state).to(self.device)
         with torch.no_grad():
-            dist, int_value, ext_value, action_prob = self.current_policy(state)
+            output = self.current_policy(state)
+            dist, int_value, ext_value, action_prob = output
             action = dist.sample()
             log_prob = dist.log_prob(action)
         return action.cpu().numpy(), int_value.cpu().numpy().squeeze(), \
@@ -124,6 +126,8 @@ class RND:
         #                                            shuffle=False)
 
         # print("train loader", train_loader.shape)
+        n_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0 
+        device_ids = [x for x in range(n_gpus)]
 
         pg_losses, ext_v_losses, int_v_losses, rnd_losses, entropies = [], [], [], [], []
         for epoch in range(self.config["n_epochs"]):
