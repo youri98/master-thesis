@@ -42,13 +42,10 @@ def train_model(config, **kwargs):
     else:
         agent = RND(**kwargs, **config)
 
-    if config["mode"] == "train_from_chkpt":
-        with open("Models/" + config["model_name"] + "/logger.obj", "rb") as file_pi:
-            logger = pickle.load(file_pi)
-            logger.reboot()
-    else:        
-        logger = Logger(agent, **config)
-        logger.log_config_params()
+
+    logger = Logger(agent, **config)
+    logger.log_config_params()
+    
     if not config["verbose"]:
         os.environ["WANDB_SILENT"] = "true"   
     else:
@@ -113,6 +110,7 @@ def train_model(config, **kwargs):
         init_log_probs = np.zeros(rollout_base_shape)
         init_next_states = np.zeros((rollout_base_shape[0],) + config["state_shape"], dtype=np.uint8)
         init_next_obs = np.zeros(rollout_base_shape + config["obs_shape"], dtype=np.uint8)
+        recording = []
 
         for iteration in tqdm(range(init_iteration, config["total_rollouts"] + 1), disable=not config["verbose"]):
 
@@ -174,6 +172,8 @@ def train_model(config, **kwargs):
             else:
                 total_int_rewards = agent.calculate_int_rewards(total_next_obs)
 
+            recording_int_rewards = total_int_rewards[0, ...]
+
             _, next_int_values, next_ext_values, * \
                 _ = agent.get_actions_and_values(next_states, batch=True)
 
@@ -201,36 +201,40 @@ def train_model(config, **kwargs):
                                     training_logs,
                                     total_int_rewards[0].mean(),
                                     total_ext_rewards[0].mean(),
-                                    total_action_probs[0].max(-1).mean()
+                                    total_action_probs[0].max(-1).mean(),
+                                    recording_int_rewards.mean(),
                                     )
             
             recording = np.stack(recording)
             logger.log_recording(recording)
-            recording = []
             logger.time_stop("logging time")
             logger.time_start()
+            logger.save_recording_local(iteration, recording)
+
             if iteration % config["interval"] == 0 or iteration == config["total_rollouts"]:
                 logger.save_params(episode, iteration)
-                logger.save_recording_local(recording)
                 logger.save_score_to_json()
                 logger.time_stop()
 
-                with open("Models/" + logger.log_dir + "/logger.obj", "wb") as file_pi:
-                    pickle.dump(logger, file_pi)
             logger.time_stop("param saving time")
+            recording = []
+            recording_int_rewards = []
+
 
 
 if __name__ == '__main__':
     #delete_files()
     config = get_params()
     config["algo"] = "RND"
-
+    config["total_rollouts"] = 10
+    config["verbose"] = True
+    config["record"] = True
     # # run 1
     # config["env"] = "VentureNoFrameskip-v4"
     # config["total_rollouts"] = int(7)
     # config["algo"] = "RND"
     # config["verbose"] = True
-    # config["interval"] = 1
+    config["interval"] = 3
 
     train_model(config)
     wandb.finish()

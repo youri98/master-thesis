@@ -8,7 +8,7 @@ from collections import deque
 import wandb
 import json
 import cv2
-
+from fastparquet import write
 
 class Logger:
     def __init__(self, agent, **config):
@@ -43,7 +43,7 @@ class Logger:
             self.create_model_folder()
 
         scoreskeys = ["Iteration", "N Frames", "Visited Rooms", "Action Probability", "Intrinsic Reward", "PG Loss", "Discriminator Loss",
-                      "Ext Value Loss",  "Int Value Loss", "Advantage", "RND Loss", "Entrinsic Reward", "Entropy", "Recording"]
+                      "Ext Value Loss",  "Int Value Loss", "Advantage", "RND Loss", "Entrinsic Reward", "Entropy", "Recording", "Recording Int Reward"]
         self.scores = {k: [] for k in scoreskeys}
 
         #self.exp_avg = lambda x, y: 0.9 * x + 0.1 * y if (y != 0).all() else y
@@ -57,6 +57,7 @@ class Logger:
         if not os.path.exists("Models"):
             os.mkdir("Models")
         os.mkdir("Models/" + self.log_dir)
+        os.mkdir("Models/" + self.log_dir + "/recording")
 
     def log_config_params(self):
         with open("Models/" + self.log_dir + '/config.json', 'w') as writer:
@@ -74,25 +75,33 @@ class Logger:
             recording = np.expand_dims(recording, 1)
             wandb.log({"video": wandb.Video(
                 np.array(recording), fps=fps, format='gif')})
-        self.scores["Recording"].append(recording.tolist())
+        # self.scores["Recording"].append(recording.tolist())
 
-    def save_recording_local(self, recording, fps=60):
+    def save_recording_local(self, iteration, recording, fps=60):
         if self.config["record"]:
             frame_size = (self.config["obs_shape"][2],
                           self.config["obs_shape"][1])
 
-            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+            fourcc = cv2.VideoWriter_fourcc(*'theo')
+            # https://stackoverflow.com/questions/49530857/python-opencv-video-format-play-in-browser
 
             out = cv2.VideoWriter(
-                "Models/" + self.log_dir + "/recording.mp4", fourcc, fps, frame_size, 0)
+                "Models/" + self.log_dir  + "/recording/" + str(iteration) + ".ogg", fourcc, fps, frame_size, 0)
+
+
+            # with open("Models/" + self.log_dir  + "/recording/" + str(iteration) + ".txt", "w") as file:
+
+                # file.write(recording)
 
             for image in recording:
                 #image = np.pad(image, ((height_pad, height_pad), (width_pad,width_pad)))
                 #image = np.mean(image, axis=0)
-                image = image[0]
+                # image = np.rand(84,84,3)
+                # image = np.zeros(frame_size, dtype="uint8")
                 image = image.astype(np.uint8)
-                image = np.expand_dims(image, axis=2)
-                image = np.tile(image, (1, 1, 3))
+                # image = np.expand_dims(image, axis=2)
+                # image = np.tile(image, (1, 1, 3))
+                # image = np.array(image)
 
                 out.write(image)
 
@@ -102,6 +111,10 @@ class Logger:
         self.episode, self.episode_ext_reward, self.visited_rooms = args
         self.max_episode_reward = max(
             self.max_episode_reward, self.episode_ext_reward)
+
+        wandb.log({"Episode Ext Reward": self.episode_ext_reward}, step=self.episode)
+        wandb.log({"Episode Visited Rooms": list(self.visited_rooms)}, step=self.episode)
+        wandb.log({"Episode Max Reward":self.max_episode_reward}, step=self.episode)
 
     def save_score_to_json(self):
         with open("Models/" + self.log_dir + '/scores.json', 'w') as file:
@@ -113,9 +126,9 @@ class Logger:
     def log_iteration(self, *args):
         if self.config["algo"] == 'APE':
             iteration, n_frames, (pg_losses, ext_value_losses, int_value_losses, rnd_losses,
-                        disc_losses, entropies, advs), int_reward, ext_reward, action_prob = args
+                        disc_losses, entropies, advs), int_reward, ext_reward, action_prob, recording_int_rewards = args
         else:
-            iteration, n_frames, (pg_losses, ext_value_losses, int_value_losses, rnd_losses, entropies, advs), int_reward, ext_reward, action_prob = args
+            iteration, n_frames, (pg_losses, ext_value_losses, int_value_losses, rnd_losses, entropies, advs), int_reward, ext_reward, action_prob, recording_int_rewards = args
         # self.running_act_prob = self.exp_avg(self.running_act_prob, action_prob)
         # self.running_int_reward = self.exp_avg(self.running_int_reward, int_reward)
         # self.running_training_logs = self.exp_avg(self.running_training_logs, np.array(training_logs))
@@ -131,7 +144,8 @@ class Logger:
             "Int Value Loss": int_value_losses,
             "RND Loss": rnd_losses,
             "Entropy": entropies,
-            #"Advantage": advs.item(),
+            "Recording Int Reward" : recording_int_rewards,
+            "Advantage": advs.item(),
             # "Intrinsic Explained variance": self.running_training_logs[5],
             # "Extrinsic Explained variance": self.running_training_logs[6],
         }

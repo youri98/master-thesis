@@ -1,24 +1,26 @@
-const modelname = "2022-05-17-17-43-28";
+const modelname = "2022-05-29-22-04-35";
 const rolloutPerIteration = 128;
 
 var ctx = document.getElementById("myChart");
+var video = document.getElementById('player');
 
 var dataset;
 var mouseMove = false;
 var prev = -1;
 
+
+
 fetch("./src/Models/" + modelname + "/scores.json")
-  .then((response) => response.json())
-  .then((data) => {
-    dataset = data;
-    makeChart(data);
-  });
+.then((response) => response.json())
+.then((data) => {
+  dataset = data;
+  makeChart(data);
+});
 
 function makeChart(data) {
   var myChart = new Chart(ctx, {
     type: "line",
     data: {
-      recording: data["Recording"],
       labels: data["Iteration"],
       datasets: [
         {
@@ -94,7 +96,7 @@ function makeChart(data) {
       plugins: {
         tooltip: {
           enabled: true,
-          position: "nearest",
+          position: "average",
           backgroundColor: "rbga(0,0,0,0)",
           callbacks: {title: function(){return}}
         },
@@ -109,50 +111,41 @@ function makeChart(data) {
       display: true,
       text: 'Chart Title',
     }
-
-    // scales: {
-    //   y: {
-    //     type: 'linear',
-    //     display: true,
-    //     position: 'left',
-    //   },
-    //   y1: {
-    //     type: 'linear',
-    //     display: true,
-    //     position: 'right',
-
-    //     // grid line settings
-    //     grid: {
-    //       drawOnChartArea: false, // only want the grid lines for one axis to show up
-    //     },
-    //   },
-    // }
   });
 }
+var active = true;
 
 const customTooltip = {
   id: "customTooltip",
   afterDraw(chart, args, options) {
     if (chart.tooltip?._active?.length) {
+
       // console.log(chart.data);
+
       var canvas = document.createElement("canvas");
       const activePoint = chart.tooltip._active[0];
       const datapoint = activePoint.index;
       const datasetIndex = activePoint.index;
       const { ctx } = chart;
-      const sizeGif = 180;
-      recording = chart.data.recording[datasetIndex];
+      const sizeGif = 100;
+      // recording = chart.data.recording[datasetIndex];
+
+
 
       // draw gif
       mouseMove = datasetIndex != prev;
       if (mouseMove) {
-        prev = datasetIndex;
 
-        plotRecording(canvas, chart, recording, datasetIndex, sizeGif);
+        plotRecording(canvas, chart, datasetIndex, sizeGif);
+
+
+        // plotRecording(canvas, chart, datasetIndex, sizeGif);
       }
 
-      //draw vertical line
 
+
+
+      //draw vertical line
       let x = chart.tooltip._active[0].element.x;
       let yAxis = chart.scales.y;
       ctx.save();
@@ -165,6 +158,9 @@ const customTooltip = {
       ctx.stroke();
       ctx.restore();
     }
+    else{
+      
+    }
   },
 };
 
@@ -172,17 +168,65 @@ var imgCanvas = document.getElementById("imageCanvas");
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function plotRecording(canvas, chart, recording, dataIndex, sizeGif) {
-  for (let frame of recording) {
-    plotFrame(frame, canvas, chart, sizeGif);
-    mouseMove = dataIndex != prev;
-    if (mouseMove) {
-      return;
-    }
-    await sleep(10);
-  }
+async function plotRecording(canvas, chart, datasetIndex, sizeGif) {
 
-  prev = dataIndex;
+    var inputPath = "./src/Models/" + modelname + "/recording/" + datasetIndex + ".ogg";
+    console.log("mousemove", datasetIndex);
+
+    var videoPlayer = document.getElementById('videoPlayer');
+
+    // remove old plot
+
+    while (videoPlayer.hasChildNodes()) {
+      console.log(videoPlayer.firstChild);
+      videoPlayer.removeChild(videoPlayer.firstChild);
+    }
+
+    const video = document.createElement("VIDEO");
+    videoPlayer.appendChild(video);
+    // new plot
+    const source = document.createElement('source');
+
+    source.setAttribute('src', inputPath);
+    source.setAttribute('type', 'video/ogg');
+
+    // console.log(source.src);
+    video.appendChild(source);
+    video.setAttribute("height", sizeGif);
+    video.setAttribute("width", sizeGif);
+    video.setAttribute("autoplay", true);
+    video.setAttribute("loop", true);
+
+    // canvas.appendChild(video);
+
+    // position video
+    await sleep(100);
+
+    const pointX = chart.tooltip._active[0].element.x;
+    const pointY = chart.tooltip._active[0].element.y;
+    const offset = 8;
+
+    console.log(pointY);
+
+    if (pointX > chart.width /2) {
+      x =  pointX  - sizeGif;
+    } else {
+      x = pointX + offset*2;
+    }
+    if (pointY < sizeGif) {
+      y = pointY  + sizeGif*2 + chart.tooltip.height * 2 + offset*2;
+    } else {
+      y = pointY - sizeGif*1.5 - chart.tooltip.height ;
+    }
+    
+    video.style.position = 'absolute';
+
+    video.style.top = y/2;
+    video.style.left = x;
+
+    await sleep(1000);
+
+  prev = datasetIndex;
 }
 
 function plotFrame(frame, canvas, chart, sizeGif) {
@@ -224,34 +268,6 @@ function plotFrame(frame, canvas, chart, sizeGif) {
     },
     function (error) {}
   );
-  // plot it left or right from datapoint
 
-  //   if (pointX > chart.width - canvas.width) {
-  //     // ctx.putImageData(
-  //     //   idata,
-  //     //   pointX - offset - canvas.width,
-  //     //   pointY - canvas.height - offset
-  //     // );
-  //     ctx.drawImage(temp,pointX - offset - canvas.width, pointY - canvas.height - offset);
-  //   } else {
-  //     ctx.drawImage(temp, pointX + offset, pointY - canvas.height - offset);
-
-  // //    ctx.putImageData(idata, pointX + offset, pointY - canvas.height - offset);
-  //   }
 }
 
-// }
-
-
-// CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r) {
-//   if (w < 2 * r) r = w / 2;
-//   if (h < 2 * r) r = h / 2;
-//   this.beginPath();
-//   this.moveTo(x+r, y);
-//   this.arcTo(x+w, y,   x+w, y+h, r);
-//   this.arcTo(x+w, y+h, x,   y+h, r);
-//   this.arcTo(x,   y+h, x,   y,   r);
-//   this.arcTo(x,   y,   x+w, y,   r);
-//   this.closePath();
-//   return this;
-// }
