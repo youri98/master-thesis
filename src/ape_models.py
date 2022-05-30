@@ -166,8 +166,14 @@ class DiscriminatorModel(nn.Module, ABC):
 
     #@autocast(device_type="cpu")
     def forward(self, rand_encoding, actions, true_encoding):
+        self.device =  torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+        self.h0.to(self.device)
+        self.c0.to(self.device)
+
         input_t = torch.cat((rand_encoding, actions), dim=-1)
         true_input_t = torch.cat((true_encoding, actions), dim=-1)
+
+        print(input_t.device)
 
         output, (h_n, c_n) = self.rnn(input_t, (self.h0, self.c0))
         output = self.fc(output)
