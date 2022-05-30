@@ -1,12 +1,19 @@
-const modelname = "2022-05-29-22-04-35";
+var modelname = "2022-05-29-22-04-35";
 const rolloutPerIteration = 128;
 
 var ctx = document.getElementById("myChart");
 var video = document.getElementById('player');
+const queryString = window.location.search;
+const urlParams = new URLSearchParams(queryString);
 
 var dataset;
 var mouseMove = false;
 var prev = -1;
+
+if (urlParams.get('fname')){
+  modelname = urlParams.get('fname')
+}
+console.log(modelname);
 
 
 
@@ -171,14 +178,14 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function plotRecording(canvas, chart, datasetIndex, sizeGif) {
 
     var inputPath = "./src/Models/" + modelname + "/recording/" + datasetIndex + ".ogg";
-    console.log("mousemove", datasetIndex);
+    // console.log("mousemove", datasetIndex);
 
     var videoPlayer = document.getElementById('videoPlayer');
 
     // remove old plot
 
     while (videoPlayer.hasChildNodes()) {
-      console.log(videoPlayer.firstChild);
+      // console.log(videoPlayer.firstChild);
       videoPlayer.removeChild(videoPlayer.firstChild);
     }
 
@@ -200,13 +207,13 @@ async function plotRecording(canvas, chart, datasetIndex, sizeGif) {
     // canvas.appendChild(video);
 
     // position video
-    await sleep(100);
+    // await sleep(100);
 
     const pointX = chart.tooltip._active[0].element.x;
     const pointY = chart.tooltip._active[0].element.y;
     const offset = 8;
 
-    console.log(pointY);
+    // console.log(pointY);
 
     if (pointX > chart.width /2) {
       x =  pointX  - sizeGif;
@@ -224,7 +231,7 @@ async function plotRecording(canvas, chart, datasetIndex, sizeGif) {
     video.style.top = y/2;
     video.style.left = x;
 
-    await sleep(1000);
+    // await sleep(1000);
 
   prev = datasetIndex;
 }
