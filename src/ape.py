@@ -242,7 +242,7 @@ class APE:
 
         temp_p = predictor_encoded_features*mask_inv
         temp_t = target_encoded_features*mask
-        features = temp_p + temp_t
+        features = (temp_p + temp_t).to(self.device)
 
         disc_preds = self.discriminator(features, actions, target_encoded_features)
         disc_loss = self.f1_loss(disc_preds[:, 0], mask[:, 0]) if self.multiple_feature_pred else self.f1_loss(disc_preds, mask)
