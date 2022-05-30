@@ -153,8 +153,8 @@ class DiscriminatorModel(nn.Module, ABC):
         self.device =  torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
         self.rnn = nn.LSTM(encoding_size + n_actions, self.hidden_layers, self.n_layers)
-        self.h0 = torch.randn((self.n_layers, self.timesteps, self.hidden_layers), dtype=torch.float32).to(self.device)
-        self.c0 = torch.randn((self.n_layers, self.timesteps, self.hidden_layers), dtype=torch.float32).to(self.device)
+        self.h0 = torch.randn((self.n_layers, self.timesteps, self.hidden_layers), dtype=torch.float32)
+        self.c0 = torch.randn((self.n_layers, self.timesteps, self.hidden_layers), dtype=torch.float32)
 
 
         self.fc = nn.Sequential(
