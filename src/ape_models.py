@@ -176,7 +176,8 @@ class DiscriminatorModel(nn.Module, ABC):
         
         self.h0.to(device)
         self.c0.to(device)
-        print(input_t.device)
+        print("input: ", input_t.device)
+        print("h0: ", self.h0.device)
 
         output, (h_n, c_n) = self.rnn(input_t, (self.h0, self.c0))
         output = self.fc(output)
