@@ -174,16 +174,17 @@ class DiscriminatorModel(nn.Module, ABC):
 
         device = input_t.device
         
-        self.h0.to(device)
-        self.c0.to(device)
-        print("input: ", input_t.device)
-        print("h0: ", self.h0.device)
+        h0 = torch.ones((self.n_layers, self.timesteps, self.hidden_layers), dtype=torch.float32).to(device)
+        c0 = torch.ones((self.n_layers, self.timesteps, self.hidden_layers), dtype=torch.float32).to(device)
 
-        output, (h_n, c_n) = self.rnn(input_t, (self.h0, self.c0))
+        # print("input: ", input_t.device)
+        # print("h0: ", self.h0.device)
+
+        output, (h_n, c_n) = self.rnn(input_t, (h0, c0))
         output = self.fc(output)
 
         with torch.no_grad():
-            _, (self.h0, self.c0) = self.rnn(true_input_t, (self.h0, self.c0))
+            _, (h0, c0) = self.rnn(true_input_t, (h0, c0))
 
         return output
 
