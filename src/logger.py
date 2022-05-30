@@ -8,7 +8,6 @@ from collections import deque
 import wandb
 import json
 import cv2
-from fastparquet import write
 
 class Logger:
     def __init__(self, agent, **config):
