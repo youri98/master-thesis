@@ -143,7 +143,7 @@ class PredictorModel(nn.Module, ABC):
         return self.seq(state)
 
 class DiscriminatorModel(nn.Module, ABC):
-    def __init__(self, encoding_size, hidden_layers=128, timesteps=8, n_layers=3, pred_size=1, n_actions=18):
+    def __init__(self, encoding_size, hidden_layers=6, timesteps=2, n_layers=1, pred_size=1, n_actions=18):
         super(DiscriminatorModel, self).__init__()
 
         self.timesteps = timesteps

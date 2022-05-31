@@ -11,6 +11,7 @@ from torch.nn.parallel import DistributedDataParallel
 import os
 from torch.utils.data import TensorDataset, DataLoader
 import sys
+from sklearn.metrics import log_loss
 
 from torch.distributions.categorical import Categorical
 
@@ -62,7 +63,7 @@ class APE:
 
         self.state_rms = RunningMeanStd(shape=self.obs_shape)
         self.int_reward_rms = RunningMeanStd(shape=(1,))
-        self.f1_loss = torch.nn.L1Loss(reduction='none')# if self.pred_size == 1 else torch.nn.L1Loss() 
+        self.loss_func = lambda y_hat,y: torch.nn.BCELoss(reduction='none')(y_hat, y.float())# if self.pred_size == 1 else torch.nn.L1Loss() 
         self.mse_loss = torch.nn.MSELoss()
 
         for param in self.target_model.parameters():
@@ -245,7 +246,7 @@ class APE:
         features = (temp_p + temp_t).to(self.device)
 
         disc_preds = self.discriminator(features, actions, target_encoded_features)
-        disc_loss = self.f1_loss(disc_preds[:, 0], mask[:, 0]) if self.multiple_feature_pred else self.f1_loss(disc_preds, mask)
+        disc_loss = self.loss_func(disc_preds[:, 0], mask[:, 0]) if self.multiple_feature_pred else self.loss_func(disc_preds, mask)
 
         if not batch:
             return disc_loss.detach().cpu().numpy()
@@ -274,7 +275,7 @@ class APE:
         features = temp_p + temp_t
 
         disc_preds = self.discriminator(features, action, target_encoded_features)
-        disc_loss = torch.mean(self.f1_loss(disc_preds, mask))
+        disc_loss = torch.mean(self.loss_func(disc_preds, mask))
 
         return disc_loss, rnd_loss
 
