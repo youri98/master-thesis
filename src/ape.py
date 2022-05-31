@@ -1,4 +1,4 @@
-from ape_models import PolicyModel, PredictorModel, TargetModel, DiscriminatorModel, DiscriminatorModelGRU
+from ape_models import PolicyModel, PredictorModel, TargetModel, DiscriminatorModel, DiscriminatorModelGRU, PredictorModelRND
 import torch
 import numpy as np
 from torch.optim.adam import Adam
@@ -36,6 +36,7 @@ class APE:
         self.current_policy = PolicyModel(self.config["state_shape"], self.config["n_actions"]).to(self.device)
         self.predictor_model = PredictorModel(self.encoding_size, timesteps=self.timesteps, pred_size=self.pred_size, n_actions=self.config["n_actions"]).to(self.device)
         self.target_model = TargetModel(self.obs_shape, self.encoding_size).to(self.device)
+        # self.predictor_model = PredictorModelRND(self.obs_shape).to(self.device)
 
 
         for param in self.target_model.parameters():
@@ -241,6 +242,8 @@ class APE:
         target_encoded_features = target_encoded_features.view(-1, self.timesteps, self.encoding_size)
 
         predictor_encoded_features = self.predictor_model(target_encoded_features, actions).detach()
+        # predictor_encoded_features = self.predictor_model(next_states, actions).detach()
+        # predictor_encoded_features = predictor_encoded_features.view(-1, self.timesteps, self.encoding_size)
 
 
 
@@ -272,6 +275,8 @@ class APE:
 
         # predictor_encoded_features = predictor_encoded_features.view(-1, self.timesteps, self.encoding_size)
         predictor_encoded_features = self.predictor_model(target_encoded_features, action)
+        # predictor_encoded_features = self.predictor_model(next_state.view(-1, *self.obs_shape), action)
+        # predictor_encoded_features = predictor_encoded_features.view(-1, self.timesteps, self.encoding_size)
 
         mask = torch.randint(0, 2, size=(*predictor_encoded_features.shape[:-1], self.pred_size)).to(self.device)
         mask_inv = torch.where((mask==0)|(mask==1), mask^1, mask).to(self.device)
@@ -286,7 +291,7 @@ class APE:
         gen_disc_preds = self.discriminator(predictor_encoded_features, action)
         gen_labels = torch.ones(gen_disc_preds.shape).float()
         gen_loss = self.loss_func(gen_disc_preds[:, 0], gen_labels[:, 0]) if self.multiple_feature_pred else self.loss_func(gen_disc_preds, gen_labels)
-        gen_loss = torch.mean(gen_loss)
+        gen_loss = torch.mean(torch.pow(predictor_encoded_features - target_encoded_features, 2))
 
         disc_preds_true = self.discriminator(target_encoded_features, action)
         true_labels = torch.ones(disc_preds_true.shape).float()
