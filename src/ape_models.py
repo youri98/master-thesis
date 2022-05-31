@@ -169,14 +169,13 @@ class DiscriminatorModel(nn.Module, ABC):
         )
 
     #@autocast(device_type="cpu")
-    def forward(self, rand_encoding, actions, true_encoding):
+    def forward(self, encoding, actions):
         # self.device =  torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
 
-        input_t = torch.cat((rand_encoding, actions), dim=-1)
-        true_input_t = torch.cat((true_encoding, actions), dim=-1)
+        input = torch.cat((encoding, actions), dim=-1)
 
-        device = input_t.device
+        device = input.device
         
         h0 = torch.ones((self.n_layers, self.timesteps, self.hidden_layers), dtype=torch.float32).to(device)
         c0 = torch.ones((self.n_layers, self.timesteps, self.hidden_layers), dtype=torch.float32).to(device)
@@ -184,11 +183,11 @@ class DiscriminatorModel(nn.Module, ABC):
         # print("input: ", input_t.device)
         # print("h0: ", self.h0.device)
 
-        output, (h_n) = self.rnn(input_t, (h0))
+        output, (h_n) = self.rnn(input, (h0))
         output = self.fc(output)
 
-        with torch.no_grad():
-            _, (h0) = self.rnn(true_input_t, (h0))
+        # with torch.no_grad():
+        #     _, (h0) = self.rnn(input, (h0))
 
         return output
 
@@ -259,3 +258,43 @@ class DiscriminatorModelGRU(nn.Module, ABC):
 #         reconstructed = self.seq(encoding)
 #         reconstructed = reconstructed.view(-1, *self.state_shape)
 #         return reconstructed
+class PredictorModelRND(nn.Module, ABC):
+
+    def __init__(self, state_shape):
+        super(PredictorModelRND, self).__init__()
+        self.state_shape = state_shape
+        c, w, h = state_shape
+        self.conv1 = nn.Conv2d(in_channels=c, out_channels=32, kernel_size=8, stride=4)
+        self.conv2 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=4, stride=2)
+        self.conv3 = nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1)
+
+        color, w, h = state_shape
+        conv1_out_shape = conv_shape((w, h), 8, 4)
+        conv2_out_shape = conv_shape(conv1_out_shape, 4, 2)
+        conv3_out_shape = conv_shape(conv2_out_shape, 3, 1)
+
+        flatten_size = conv3_out_shape[0] * conv3_out_shape[1] * 64
+
+        self.fc1 = nn.Linear(in_features=flatten_size, out_features=512)
+        self.fc2 = nn.Linear(in_features=512, out_features=512)
+        self.encoded_features = nn.Linear(in_features=512, out_features=512)
+
+        for layer in self.modules():
+            if isinstance(layer, nn.Conv2d):
+                nn.init.orthogonal_(layer.weight, gain=np.sqrt(2))
+                layer.bias.data.zero_()
+            elif isinstance(layer, nn.Linear):
+                nn.init.orthogonal_(layer.weight, gain=np.sqrt(2))
+                layer.bias.data.zero_()
+
+    def forward(self, inputs, actions):
+        x = inputs
+        x = F.leaky_relu(self.conv1(x))
+        x = F.leaky_relu(self.conv2(x))
+        x = F.leaky_relu((self.conv3(x)))
+        x = x.contiguous()
+        x = x.view(x.size(0), -1)
+        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc2(x))
+
+        return self.encoded_features(x)
