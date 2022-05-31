@@ -106,44 +106,48 @@ class TargetModel(nn.Module, ABC):
         return self.seq(state)
 
 class PredictorModel(nn.Module, ABC):
-    def __init__(self, state_shape, encoding_size):
+    def __init__(self, encoding_size, hidden_size=6, timesteps=2, n_layers=2, pred_size=1, n_actions=18):
         super(PredictorModel, self).__init__()
-        self.state_shape = state_shape
 
-        color, w, h = state_shape
-        conv1_out_shape = conv_shape((w, h), 8, 4)
-        conv2_out_shape = conv_shape(conv1_out_shape, 4, 2)
-        conv3_out_shape = conv_shape(conv2_out_shape, 3, 1)
 
-        flatten_size = conv3_out_shape[0] * conv3_out_shape[1] * 64
+        self.encoding_size = encoding_size
+        self.timesteps = timesteps
+        self.hidden_size = hidden_size
+        self.n_layers = n_layers
+        self.n_actions = n_actions
+        self.device =  torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
-        self.seq = nn.Sequential(
-            nn.Conv2d(color, 32, kernel_size=8, stride=4),
-            nn.LeakyReLU(),
-            nn.Conv2d(32, 64, kernel_size=4, stride=2),
-            nn.LeakyReLU(),
-            nn.Conv2d(64, 64,  kernel_size=3, stride=1),
-            nn.LeakyReLU(),
-            nn.Flatten(start_dim=1),
-            nn.Linear(flatten_size, 512),
+        self.rnn = nn.GRU(encoding_size + n_actions, self.hidden_size, self.n_layers)
+        self.h0 = torch.randn((self.n_layers, self.timesteps, self.hidden_size), dtype=torch.float32)
+        self.c0 = torch.randn((self.n_layers, self.timesteps, self.hidden_size), dtype=torch.float32)
+
+
+        self.fc = nn.Sequential(
+            nn.Linear(self.hidden_size, 256),
             nn.ReLU(),
-            nn.Linear(512, 512),
-            nn.ReLU(),
-            nn.Linear(512, encoding_size),
+            nn.Linear(256, encoding_size),
+            # nn.Sigmoid()
         )
 
+    def forward(self, true_encoding, actions):
 
-        for layer in self.seq.children():
-            if isinstance(layer, nn.Conv2d) or isinstance(layer, nn.Linear):
-                nn.init.orthogonal_(layer.weight, gain=np.sqrt(2))
-                layer.bias.data.zero_()
-    
-    #@autocast(device_type="cpu")
-    def forward(self, state):
-        return self.seq(state)
+        input_encoding = true_encoding[:, 0, :]
+        input_encoding = torch.tile(torch.unsqueeze(input_encoding, dim=1), (1, 8, 1))
+
+        total_input = torch.cat((input_encoding, actions), dim=-1)
+        device = true_encoding.device
+        
+        h0 = torch.ones((self.n_layers, self.timesteps, self.hidden_size), dtype=torch.float32).to(device)
+        
+        output, hn = self.rnn(total_input, h0)
+        output = self.fc(output)
+
+        return output
+
+
 
 class DiscriminatorModel(nn.Module, ABC):
-    def __init__(self, encoding_size, hidden_layers=6, timesteps=2, n_layers=1, pred_size=1, n_actions=18):
+    def __init__(self, encoding_size, hidden_layers=6, timesteps=2, n_layers=2, pred_size=1, n_actions=18):
         super(DiscriminatorModel, self).__init__()
 
         self.timesteps = timesteps
@@ -152,7 +156,7 @@ class DiscriminatorModel(nn.Module, ABC):
         self.n_actions = n_actions
         self.device =  torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
-        self.rnn = nn.LSTM(encoding_size + n_actions, self.hidden_layers, self.n_layers)
+        self.rnn = nn.GRU(encoding_size + n_actions, self.hidden_layers, self.n_layers)
         self.h0 = torch.randn((self.n_layers, self.timesteps, self.hidden_layers), dtype=torch.float32)
         self.c0 = torch.randn((self.n_layers, self.timesteps, self.hidden_layers), dtype=torch.float32)
 
@@ -180,11 +184,11 @@ class DiscriminatorModel(nn.Module, ABC):
         # print("input: ", input_t.device)
         # print("h0: ", self.h0.device)
 
-        output, (h_n, c_n) = self.rnn(input_t, (h0, c0))
+        output, (h_n) = self.rnn(input_t, (h0))
         output = self.fc(output)
 
         with torch.no_grad():
-            _, (h0, c0) = self.rnn(true_input_t, (h0, c0))
+            _, (h0) = self.rnn(true_input_t, (h0))
 
         return output
 

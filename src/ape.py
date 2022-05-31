@@ -34,14 +34,13 @@ class APE:
 
         self.discriminator = DiscriminatorModel(self.encoding_size, timesteps=self.timesteps, pred_size=self.pred_size, n_actions=self.config["n_actions"]).to(self.device)
         self.current_policy = PolicyModel(self.config["state_shape"], self.config["n_actions"]).to(self.device)
-        self.predictor_model = PredictorModel(self.obs_shape, self.encoding_size).to(self.device)
+        self.predictor_model = PredictorModel(self.encoding_size, timesteps=self.timesteps, pred_size=self.pred_size, n_actions=self.config["n_actions"]).to(self.device)
         self.target_model = TargetModel(self.obs_shape, self.encoding_size).to(self.device)
 
 
         for param in self.target_model.parameters():
             param.requires_grad = False
 
-        self.total_trainable_params = list(self.current_policy.parameters()) + list(self.predictor_model.parameters()) + list(self.discriminator.parameters())
 
 
         self.n_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0 
@@ -58,7 +57,10 @@ class APE:
             self.current_policy.to(self.device)
             self.discriminator.to(self.device)
 
-        self.optimizer = Adam(self.total_trainable_params, lr=self.config["lr"])
+        self.pol_optimizer = Adam(self.current_policy.parameters(), lr=self.config["lr"])
+        self.pred_optimizer = Adam(self.predictor_model.parameters(), lr=self.config["lr"])
+        self.disc_optimizer = Adam(self.discriminator.parameters(), lr=self.config["lr"])
+
         # consider LBFGS
 
         self.state_rms = RunningMeanStd(shape=self.obs_shape)
@@ -84,11 +86,11 @@ class APE:
 
         return np.concatenate(returns)
 
-    def optimize(self, loss):
-        self.optimizer.zero_grad()
-        loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.total_trainable_params, np.inf, 0.5)
-        self.optimizer.step()
+    def optimize(self, loss, optimizer, model):
+        model.zero_grad()
+        loss.backward(retain_graph=True)
+        torch.nn.utils.clip_grad_norm_(model.parameters(), np.inf, 0.5)
+        optimizer.step()
 
     def get_actions_and_values(self, state, batch=False):
         """
@@ -198,16 +200,19 @@ class APE:
                 action = action.to(torch.int64).to(self.device)
                 action = torch.nn.functional.one_hot(action, num_classes=self.n_actions)
                 action = action.view(-1, self.timesteps, self.n_actions)
-                disc_loss, rnd_loss = self.calculate_loss(next_state, action)
+                disc_loss, gen_loss = self.calculate_loss(next_state, action)
 
-                total_loss = critic_loss + pg_loss - self.config["ent_coeff"] * entropy + rnd_loss + disc_loss
 
-                self.optimize(total_loss)
+                total_loss = critic_loss + pg_loss - self.config["ent_coeff"] * entropy
+
+                self.optimize(total_loss, self.pol_optimizer, self.current_policy)
+                self.optimize(gen_loss, self.pred_optimizer, self.predictor_model)
+                self.optimize(disc_loss, self.disc_optimizer, self.discriminator)
 
                 pg_losses.append(pg_loss.item())
                 ext_v_losses.append(ext_value_loss.item())
                 int_v_losses.append(int_value_loss.item())
-                rnd_losses.append(rnd_loss.item())
+                rnd_losses.append(gen_loss.item())
                 disc_losses.append(disc_loss.item())
                 entropies.append(entropy.item())
             # https://github.com/openai/random-network-distillation/blob/f75c0f1efa473d5109d487062fd8ed49ddce6634/ppo_agent.py#L187
@@ -227,14 +232,16 @@ class APE:
 
         actions = torch.from_numpy(actions).to(torch.int64).to(self.device)
         actions = torch.nn.functional.one_hot(actions, num_classes=self.n_actions)
+        actions = actions.view(-1, self.timesteps, self.n_actions)
 
-        predictor_encoded_features = self.predictor_model(next_states).detach()
         target_encoded_features = self.target_model(next_states).detach()
+        # predictor_encoded_features = self.predictor_model(target_encoded_features, actions).detach()
 
-        predictor_encoded_features = predictor_encoded_features.view(-1, self.timesteps, self.encoding_size)
+        # predictor_encoded_features = predictor_encoded_features.view(-1, self.timesteps, self.encoding_size)
         target_encoded_features = target_encoded_features.view(-1, self.timesteps, self.encoding_size)
 
-        actions = actions.view(-1, self.timesteps, self.n_actions)
+        predictor_encoded_features = self.predictor_model(target_encoded_features, actions).detach()
+
 
 
         mask = torch.randint(0, 2, size=(*predictor_encoded_features.shape[:-1], self.pred_size)).to(self.device)
@@ -249,23 +256,19 @@ class APE:
         disc_loss = self.loss_func(disc_preds[:, 0], mask[:, 0]) if self.multiple_feature_pred else self.loss_func(disc_preds, mask)
 
         if not batch:
-            return disc_loss.detach().cpu().numpy()
+            return 1/disc_loss.detach().cpu().numpy()
         else:
-            return disc_loss.detach().cpu().numpy().reshape((self.config["n_workers"], self.config["rollout_length"]))
+            return 1/disc_loss.detach().cpu().numpy().reshape((self.config["n_workers"], self.config["rollout_length"]))
 
     def calculate_loss(self, next_state, action): 
         
         target_encoded_features = self.target_model(next_state.view(-1, *self.obs_shape))
-        predictor_encoded_features = self.predictor_model(next_state.view(-1, *self.obs_shape))
-
-        predictor_encoded_features = predictor_encoded_features.view(-1, self.timesteps, self.encoding_size)
+        
         target_encoded_features = target_encoded_features.view(-1, self.timesteps, self.encoding_size)
-        # reconstructed_img = self.decoder(target_encoded_features)
+        # predictor_encoded_features = self.predictor_model(target_encoded_features, action).detach()
 
-        rnd_loss = (predictor_encoded_features - target_encoded_features).pow(2).mean(-1)
-        mask = torch.rand(rnd_loss.size(), device=self.device).to(self.device)
-        mask = (mask < self.config["predictor_proportion"]).float()
-        rnd_loss = (mask * rnd_loss).sum() / torch.max(mask.sum(), torch.Tensor([1]).to(self.device))
+        # predictor_encoded_features = predictor_encoded_features.view(-1, self.timesteps, self.encoding_size)
+        predictor_encoded_features = self.predictor_model(target_encoded_features, action)
 
         mask = torch.randint(0, 2, size=(*predictor_encoded_features.shape[:-1], self.pred_size)).to(self.device)
         mask_inv = torch.where((mask==0)|(mask==1), mask^1, mask).to(self.device)
@@ -275,9 +278,12 @@ class APE:
         features = temp_p + temp_t
 
         disc_preds = self.discriminator(features, action, target_encoded_features)
+        gen_loss = torch.mean(self.loss_func(disc_preds, mask_inv))
+
+        disc_preds =  self.discriminator(features.detach(), action, target_encoded_features)
         disc_loss = torch.mean(self.loss_func(disc_preds, mask))
 
-        return disc_loss, rnd_loss
+        return disc_loss, gen_loss
 
     def set_from_checkpoint(self, checkpoint): 
         self.current_policy.load_state_dict(checkpoint["current_policy_state_dict"])

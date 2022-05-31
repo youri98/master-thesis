@@ -165,7 +165,6 @@ class Logger:
         params = {"current_policy_state_dict": self.agent.current_policy.state_dict(),
                     "predictor_model_state_dict": self.agent.predictor_model.state_dict(),
                     "target_model_state_dict": self.agent.target_model.state_dict(),
-                    "optimizer_state_dict": self.agent.optimizer.state_dict(),
                     "state_rms_mean": self.agent.state_rms.mean,
                     "state_rms_var": self.agent.state_rms.var,
                     "state_rms_count": self.agent.state_rms.count,
@@ -180,6 +179,13 @@ class Logger:
 
         if self.config['algo'] == "APE":
             params["discriminator_model_state_dict"] = self.agent.discriminator.state_dict()
+            params["pred_optimizer"] = self.agent.pred_optimizer.state_dict()
+            params["pol_optimizer"] = self.agent.pol_optimizer.state_dict()
+            params["disc_optimizer"] = self.agent.disc_optimizer.state_dict()
+
+        else:
+            params["optimizer_state_dict"] = self.agent.optimizer.state_dict(),
+
 
         torch.save(params, "Models/" + self.log_dir + "/params.pth")
 
