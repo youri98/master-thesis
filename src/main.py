@@ -225,7 +225,7 @@ if __name__ == '__main__':
     #delete_files()
     config = get_params()
     config["algo"] = "APE"
-    config["total_rollouts"] = 50
+    config["total_rollouts"] = 10
     config["verbose"] = True
     config["record"] = True
     # # run 1

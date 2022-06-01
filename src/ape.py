@@ -257,8 +257,9 @@ class APE:
 
         disc_preds_fake = self.discriminator(predictor_encoded_features, actions)
         fake_labels = torch.zeros(disc_preds_fake.shape).float().to(self.device)
-        disc_loss = self.loss_func(disc_preds_fake[:, 0], fake_labels[:, 0]) if self.multiple_feature_pred else self.loss_func(disc_preds_fake, fake_labels)
-
+        disc_loss = self.loss_func(disc_preds_fake, fake_labels) if self.multiple_feature_pred else self.loss_func(disc_preds_fake, fake_labels)
+        if self.multiple_feature_pred:
+            disc_loss = torch.mean(disc_loss, dim=-1)
 
         if not batch:
             return 1/disc_loss.detach().cpu().numpy()
@@ -297,14 +298,14 @@ class APE:
         fake_labels = torch.zeros(disc_preds_fake.shape).float().to(self.device)
         disc_loss_fake = self.loss_func(disc_preds_fake[:, 0], fake_labels[:, 0]) if self.multiple_feature_pred else self.loss_func(disc_preds_fake, fake_labels)
 
-        gen_disc_preds = self.discriminator(predictor_encoded_features, action)
-        gen_labels = torch.ones(gen_disc_preds.shape).float().to(self.device)
-        gen_loss = self.loss_func(gen_disc_preds[:, 0], gen_labels[:, 0]) if self.multiple_feature_pred else self.loss_func(gen_disc_preds, gen_labels)
-        # gen_loss = torch.mean(torch.pow(predictor_encoded_features - target_encoded_features, 2))        
+        # gen_disc_preds = self.discriminator(predictor_encoded_features, action)
+        # gen_labels = torch.ones(gen_disc_preds.shape).float().to(self.device)
+        # gen_loss = self.loss_func(gen_disc_preds[:, 0], gen_labels[:, 0]) if self.multiple_feature_pred else self.loss_func(gen_disc_preds, gen_labels)
+        gen_loss = torch.mean(torch.pow(predictor_encoded_features - target_encoded_features, 2))        
 
 
-        mask = torch.rand(gen_loss.size(), device=self.device)
-        mask = (mask < self.config["predictor_proportion"]).float()
+        # mask = torch.rand(gen_loss.size(), device=self.device)
+        # mask = (mask < self.config["predictor_proportion"]).float()
         
         # gen_loss = (mask * gen_loss).sum() / torch.max(mask.sum(), torch.Tensor([1]).to(self.device)) 
         # disc_loss_true = (mask * gen_loss).sum() / torch.max(mask.sum(), torch.Tensor([1]).to(self.device)) 

@@ -1,3 +1,4 @@
+from cgitb import html
 import numpy as np
 import torch.nn as nn
 from torch.distributions.categorical import Categorical
@@ -106,7 +107,7 @@ class TargetModel(nn.Module, ABC):
         return self.seq(state)
 
 class PredictorModel(nn.Module, ABC):
-    def __init__(self, encoding_size, hidden_size=64, timesteps=2, n_layers=3, pred_size=1, n_actions=18):
+    def __init__(self, encoding_size, hidden_size=64, timesteps=2, n_layers=1, pred_size=1, n_actions=18):
         super(PredictorModel, self).__init__()
 
 
@@ -117,7 +118,7 @@ class PredictorModel(nn.Module, ABC):
         self.n_actions = n_actions
         self.device =  torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
-        self.rnn = nn.GRU(encoding_size + n_actions, self.hidden_size, self.n_layers)
+        self.rnn = nn.GRU(encoding_size, self.hidden_size, self.n_layers)
         self.h0 = torch.randn((self.n_layers, self.timesteps, self.hidden_size), dtype=torch.float32)
         self.c0 = torch.randn((self.n_layers, self.timesteps, self.hidden_size), dtype=torch.float32)
 
@@ -131,18 +132,30 @@ class PredictorModel(nn.Module, ABC):
 
     def forward(self, true_encoding, actions):
 
-        input_encoding = true_encoding[:, 0, :]
-        input_encoding = torch.tile(torch.unsqueeze(input_encoding, dim=1), (1, 8, 1))
-
-        total_input = torch.cat((input_encoding, actions), dim=-1)
-        device = true_encoding.device
+        input_frame = torch.unsqueeze(true_encoding[:, 0, :], dim=1)
+        #actions = torch.unsqueeze(actions, dim=-2)
+        device = input_frame.device
+        h = torch.ones((self.n_layers, 1, self.hidden_size), dtype=torch.float32).to(device)
         
-        h0 = torch.ones((self.n_layers, self.timesteps, self.hidden_size), dtype=torch.float32).to(device)
-        
-        output, hn = self.rnn(total_input, h0)
-        output = self.fc(output)
+        pred_frame = input_frame
+        frames = input_frame
+        for t in range(self.timesteps - 1):
+            #action = actions[:, t, ...]
+            #input = torch.cat((pred_frame, action), dim=-1)
+            output, h = self.rnn(pred_frame, h)
+            pred_frame = self.fc(output)
 
-        return output
+            frames = torch.cat((frames, pred_frame), dim=1)
+
+        # input_encoding = torch.tile(torch.unsqueeze(input_encoding, dim=1), (1, 8, 1))
+
+        # total_input = torch.cat((input_encoding, actions), dim=-1)
+
+        
+        # output, hn = self.rnn(total_input, h0)
+        # output = self.fc(output)
+
+        return frames
 
 
 
