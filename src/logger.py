@@ -41,8 +41,8 @@ class Logger:
         if self.config["mode"] == "train_from_scratch":
             self.create_model_folder()
 
-        scoreskeys = ["Iteration", "N Frames", "Visited Rooms", "Action Probability", "Intrinsic Reward", "PG Loss", "Discriminator Loss", "Generator Loss", "Discriminator L1 Loss", "Generator L1 Loss",
-                      "Ext Value Loss",  "Int Value Loss", "Advantage", "RND Loss", "Entrinsic Reward", "Entropy", "Recording", "Recording Int Reward"]
+        scoreskeys = ["Iteration", "N Frames", "Visited Rooms", "Action Probability", "Intrinsic Reward", "PG Loss", "Discriminator Loss", "Gen Loss", "Discriminator L1 Loss", "Generator L1 Loss",
+                      "Ext Value Loss",  "Int Value Loss", "Advantage", "RND Loss", "Entrinsic Reward", "Entropy", "Recording", "Recording Int Reward", "LALA"]
         self.scores = {k: [] for k in scoreskeys}
 
         #self.exp_avg = lambda x, y: 0.9 * x + 0.1 * y if (y != 0).all() else y
@@ -112,7 +112,7 @@ class Logger:
             self.max_episode_reward, self.episode_ext_reward)
 
         wandb.log({"Episode Ext Reward": self.episode_ext_reward}, step=self.episode)
-        wandb.log({"Episode Visited Rooms": list(self.visited_rooms)}, step=self.episode)
+        wandb.log({"Ep Visited Rooms": list(self.visited_rooms)}, step=self.episode)
         wandb.log({"Episode Max Reward":self.max_episode_reward}, step=self.episode)
 
     def save_score_to_json(self):
@@ -150,9 +150,9 @@ class Logger:
 
         if self.config['algo'] == 'APE':
             params["Discriminator Loss"] = disc_losses
-            params["Generator Loss"] =  rnd_losses
-            params["Generator L1 Loss"] = disc_l1_losses 
+            params["Generator L1 Loss"] = disc_l1_losses
             params["Discriminator L1 Loss"] = gen_l1_losses
+            params["Gen Loss"] = rnd_losses
         else:
             params["RND Loss"] = rnd_losses
 
