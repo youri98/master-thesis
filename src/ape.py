@@ -271,7 +271,6 @@ class APE:
             return 1/disc_loss.detach().cpu().numpy().reshape((self.config["n_workers"], self.config["rollout_length"]))
 
     def calculate_loss(self, next_state, action): 
-        
         target_encoded_features = self.target_model(next_state.view(-1, *self.obs_shape))
         
         target_encoded_features = target_encoded_features.view(-1, self.timesteps, self.encoding_size)
@@ -279,8 +278,6 @@ class APE:
 
         # predictor_encoded_features = predictor_encoded_features.view(-1, self.timesteps, self.encoding_size)
         predictor_encoded_features = self.predictor_model(target_encoded_features, action)
-        # predictor_encoded_features = self.predictor_model(next_state.view(-1, *self.obs_shape), action)
-        predictor_encoded_features = predictor_encoded_features.view(-1, self.timesteps, self.encoding_size)
 
         mask = torch.randint(0, 2, size=(*predictor_encoded_features.shape[:-1], self.pred_size)).to(self.device)
         mask_inv = torch.where((mask==0)|(mask==1), mask^1, mask).to(self.device)
@@ -292,47 +289,27 @@ class APE:
         # predictor_encoded_features = torch.ones(predictor_encoded_features.shape)
         # target_encoded_features = torch.zeros(target_encoded_features.shape)
 
-
+        gen_disc_preds = self.discriminator(predictor_encoded_features, action)
+        gen_labels = torch.ones(gen_disc_preds.shape).float()
+        gen_loss = self.loss_func(gen_disc_preds[:, 0], gen_labels[:, 0]) if self.multiple_feature_pred else self.loss_func(gen_disc_preds, gen_labels)
+        gen_loss = torch.mean(gen_loss)
 
         disc_preds_true = self.discriminator(target_encoded_features, action)
-        true_labels = torch.ones(disc_preds_true.shape).float().to(self.device)
+        true_labels = torch.ones(disc_preds_true.shape).float()
         disc_loss_true = self.loss_func(disc_preds_true[:, 0], true_labels[:, 0]) if self.multiple_feature_pred else self.loss_func(disc_preds_true, true_labels)
-        disc_loss_true_l1 = self.loss_l1(disc_preds_true[:, 0], true_labels[:, 0]) if self.multiple_feature_pred else self.loss_l1(disc_preds_true, true_labels)
+        disc_loss_true = torch.mean(disc_loss_true)
 
         disc_preds_fake = self.discriminator(predictor_encoded_features.detach(), action)
-        fake_labels = torch.zeros(disc_preds_fake.shape).float().to(self.device)
+        fake_labels = torch.zeros(disc_preds_fake.shape).float()
         disc_loss_fake = self.loss_func(disc_preds_fake[:, 0], fake_labels[:, 0]) if self.multiple_feature_pred else self.loss_func(disc_preds_fake, fake_labels)
-        disc_loss_fake_l1 = self.loss_l1(disc_preds_fake[:, 0], fake_labels[:, 0]) if self.multiple_feature_pred else self.loss_l1(disc_preds_fake, fake_labels)
-
-        gen_disc_preds = self.discriminator(predictor_encoded_features, action)
-        gen_labels = torch.ones(gen_disc_preds.shape).float().to(self.device)
-        gen_loss = self.loss_func(gen_disc_preds[:, 0], gen_labels[:, 0]) if self.multiple_feature_pred else self.loss_func(gen_disc_preds, gen_labels)
-        # gen_loss = torch.mean(torch.pow(predictor_encoded_features - target_encoded_features, 2))        
-        gen_loss = self.loss_func(gen_disc_preds[:, 0], gen_labels[:, 0]) if self.multiple_feature_pred else self.loss_func(gen_disc_preds, gen_labels)
-        gen_l1_loss = self.loss_l1(gen_disc_preds[:, 0], gen_labels[:, 0]) if self.multiple_feature_pred else self.loss_l1(gen_disc_preds, gen_labels)
-        # mask = torch.rand(gen_loss.size(), device=self.device)
-        # mask = (mask < self.config["predictor_proportion"]).float()
-        
-        # gen_loss = (mask * gen_loss).sum() / torch.max(mask.sum(), torch.Tensor([1]).to(self.device)) 
-        # disc_loss_true = (mask * gen_loss).sum() / torch.max(mask.sum(), torch.Tensor([1]).to(self.device)) 
-        # disc_loss_fake = (mask * gen_loss).sum() / torch.max(mask.sum(), torch.Tensor([1]).to(self.device)) 
-        gen_loss = torch.mean(gen_loss)
-        disc_loss_true = torch.mean(disc_loss_true)
         disc_loss_fake = torch.mean(disc_loss_fake)
-        gen_l1_loss = torch.mean(gen_l1_loss)
-        disc_loss_true_l1 = torch.mean(disc_loss_true_l1)
-        disc_loss_fake_l1 =torch.mean(disc_loss_fake_l1)
-
-        disc_loss_fake.backward()
-        disc_loss_true.backward()
-        gen_loss.backward()
-
-
 
         disc_loss = (disc_loss_true + disc_loss_fake) / 2
-        disc_loss_l1 = (disc_loss_true_l1 + disc_loss_fake_l1) / 2
 
-        return disc_loss, gen_loss, disc_loss_l1, gen_l1_loss
+        disc_loss.backward()
+        gen_loss.backward()
+
+        return disc_loss, gen_loss
 
     def set_from_checkpoint(self, checkpoint): 
         self.current_policy.load_state_dict(checkpoint["current_policy_state_dict"])
