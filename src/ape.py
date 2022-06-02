@@ -89,8 +89,10 @@ class APE:
 
         return np.concatenate(returns)
 
+
     def optimize(self, loss, optimizer, model):
         model.zero_grad()
+        loss.backward(retain_graph=True)
         torch.nn.utils.clip_grad_norm_(model.parameters(), np.inf, 0.5)
         optimizer.step()
 
@@ -268,6 +270,7 @@ class APE:
             return 1/disc_loss.detach().cpu().numpy().reshape((self.config["n_workers"], self.config["rollout_length"]))
 
     def calculate_loss(self, next_state, action): 
+        
         target_encoded_features = self.target_model(next_state.view(-1, *self.obs_shape))
         
         target_encoded_features = target_encoded_features.view(-1, self.timesteps, self.encoding_size)
@@ -302,9 +305,6 @@ class APE:
         disc_loss_fake = torch.mean(disc_loss_fake)
 
         disc_loss = (disc_loss_true + disc_loss_fake) / 2
-
-        disc_loss.backward()
-        gen_loss.backward()
 
         return disc_loss, gen_loss
 
