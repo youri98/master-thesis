@@ -41,7 +41,7 @@ class Logger:
         if self.config["mode"] == "train_from_scratch":
             self.create_model_folder()
 
-        scoreskeys = ["Iteration", "N Frames", "Visited Rooms", "Action Probability", "Intrinsic Reward", "PG Loss", "Discriminator Loss",
+        scoreskeys = ["Iteration", "N Frames", "Visited Rooms", "Action Probability", "Intrinsic Reward", "PG Loss", "Discriminator Loss", "Generator Loss", "Discriminator L1 Loss", "Generator L1 Loss",
                       "Ext Value Loss",  "Int Value Loss", "Advantage", "RND Loss", "Entrinsic Reward", "Entropy", "Recording", "Recording Int Reward"]
         self.scores = {k: [] for k in scoreskeys}
 
@@ -125,9 +125,9 @@ class Logger:
     def log_iteration(self, *args):
         if self.config["algo"] == 'APE':
             iteration, n_frames, (pg_losses, ext_value_losses, int_value_losses, rnd_losses,
-                        disc_losses, entropies, advs), int_reward, ext_reward, action_prob, recording_int_rewards = args
+                        disc_losses, entropies, advs, disc_l1_losses, gen_l1_losses), int_reward, ext_reward, action_prob, recording_int_rewards = args
         else:
-            iteration, n_frames, (pg_losses, ext_value_losses, int_value_losses, rnd_losses, entropies, advs), int_reward, ext_reward, action_prob, recording_int_rewards = args
+            iteration, n_frames, (pg_losses, ext_value_losses, int_value_losses, rnd_losses, entropies, advs, disc_l1_losses, gen_l1_losses), int_reward, ext_reward, action_prob, recording_int_rewards = args
         # self.running_act_prob = self.exp_avg(self.running_act_prob, action_prob)
         # self.running_int_reward = self.exp_avg(self.running_int_reward, int_reward)
         # self.running_training_logs = self.exp_avg(self.running_training_logs, np.array(training_logs))
@@ -141,7 +141,6 @@ class Logger:
             "PG Loss": pg_losses,
             "Ext Value Loss": ext_value_losses,
             "Int Value Loss": int_value_losses,
-            "RND Loss": rnd_losses,
             "Entropy": entropies,
             "Recording Int Reward" : recording_int_rewards,
             "Advantage": advs.item(),
@@ -151,6 +150,12 @@ class Logger:
 
         if self.config['algo'] == 'APE':
             params["Discriminator Loss"] = disc_losses
+            params["Generator Loss"] =  rnd_losses,
+            params["Generator L1 Loss"] = disc_l1_losses 
+            params["Discriminator L1 Loss"] = gen_l1_losses
+        else:
+            params["RND Loss"] = rnd_losses
+
 
         self.scores['Iteration'].append(iteration)
         for k, v in params.items():
@@ -159,7 +164,7 @@ class Logger:
             self.scores[k].append(v)
 
         params.update(self.timer)
-        wandb.log(params)
+        wandb.log(params, step=iteration)
 
     def save_params(self, episode, iteration):
         params = {"current_policy_state_dict": self.agent.current_policy.state_dict(),
