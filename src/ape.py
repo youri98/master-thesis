@@ -202,9 +202,9 @@ class APE:
                 action = action.to(torch.int64).to(self.device)
                 action = torch.nn.functional.one_hot(action, num_classes=self.n_actions)
                 action = action.view(-1, self.timesteps, self.n_actions)
-                disc_loss, gen_loss, disc_loss_l1, gen_l1_loss = self.calculate_loss(next_state, action)
+                disc_loss, gen_loss = self.calculate_loss(next_state, action)
 
-
+                disc_loss_l1, gen_l1_loss = 0,0
                 total_loss = critic_loss + pg_loss - self.config["ent_coeff"] * entropy
 
                 self.optimize(total_loss, self.pol_optimizer, self.current_policy)
@@ -217,8 +217,8 @@ class APE:
                 rnd_losses.append(gen_loss.item())
                 disc_losses.append(disc_loss.item())
                 entropies.append(entropy.item())
-                disc_l1_losses.append(disc_loss_l1.item())
-                gen_l1_losses.append(gen_l1_loss.item())
+                disc_l1_losses.append(disc_loss_l1)
+                gen_l1_losses.append(gen_l1_loss)
             # https://github.com/openai/random-network-distillation/blob/f75c0f1efa473d5109d487062fd8ed49ddce6634/ppo_agent.py#L187
 
         return np.mean(pg_losses), np.mean(ext_v_losses), np.mean(int_v_losses), np.mean(rnd_losses), np.mean(disc_losses), np.mean(entropies), np.mean(advs), np.mean(disc_l1_losses), np.mean(gen_l1_losses)#, int_values, int_rets, ext_values, ext_rets
