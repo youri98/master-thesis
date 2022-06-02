@@ -69,11 +69,11 @@ class Logger:
         self.timer[kind] = self.timer[kind] + (time.time(
         ) - self.start_time) if kind in self.timer else (time.time() - self.start_time)
 
-    def log_recording(self, recording, fps=60):
+    def log_recording(self, iteration, recording, fps=60):
         if recording is not None:
             recording = np.expand_dims(recording, 1)
             wandb.log({"video": wandb.Video(
-                np.array(recording), fps=fps, format='gif')})
+                np.array(recording), fps=fps, format='gif')}, step=iteration)
         # self.scores["Recording"].append(recording.tolist())
 
     def save_recording_local(self, iteration, recording, fps=60):

@@ -205,7 +205,7 @@ def train_model(config, **kwargs):
                                     )
             
             recording = np.stack(recording)
-            logger.log_recording(recording)
+            logger.log_recording(iteration, recording)
             logger.time_stop("logging time")
             logger.time_start()
             logger.save_recording_local(iteration, recording)
@@ -225,7 +225,7 @@ if __name__ == '__main__':
     #delete_files()
     config = get_params()
     config["algo"] = "APE"
-    config["total_rollouts"] = 10
+    config["total_rollouts"] = 20
     config["verbose"] = True
     config["record"] = True
     # # run 1
@@ -233,7 +233,7 @@ if __name__ == '__main__':
     # config["total_rollouts"] = int(7)
     # config["algo"] = "RND"
     # config["verbose"] = True
-    config["interval"] = 3
+    config["interval"] = 5
 
     train_model(config)
     wandb.finish()
