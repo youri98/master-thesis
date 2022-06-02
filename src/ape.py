@@ -18,7 +18,7 @@ from torch.distributions.categorical import Categorical
 torch.backends.cudnn.benchmark = True
 
 class APE:
-    def __init__(self, timesteps=8, use_decoder=False, encoding_size=512, multiple_feature_pred=False, **config):
+    def __init__(self, timesteps=8, use_decoder=False, encoding_size=512, multiple_feature_pred=True, **config):
 
         self.config = config
         self.mini_batch_size = self.config["batch_size"]
@@ -260,9 +260,11 @@ class APE:
 
         disc_preds_fake = self.discriminator(predictor_encoded_features, actions)
         fake_labels = torch.zeros(disc_preds_fake.shape).float().to(self.device)
-        disc_loss, _ = self.loss_func(disc_preds_fake[:, 0], fake_labels[:, 0]) if self.multiple_feature_pred else self.loss_func(disc_preds_fake, fake_labels)
+        disc_loss, _ = self.loss_func(disc_preds_fake, fake_labels) if self.multiple_feature_pred else self.loss_func(disc_preds_fake, fake_labels)
 
-
+        if self.multiple_feature_pred:
+            disc_loss = torch.mean(disc_loss, dim=-1)
+            
         if not batch:
             return 1/disc_loss.detach().cpu().numpy()
         else:
