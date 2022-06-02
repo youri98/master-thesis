@@ -150,7 +150,7 @@ class Logger:
 
         if self.config['algo'] == 'APE':
             params["Discriminator Loss"] = disc_losses
-            params["Generator Loss"] =  rnd_losses,
+            params["Generator Loss"] =  rnd_losses
             params["Generator L1 Loss"] = disc_l1_losses 
             params["Discriminator L1 Loss"] = gen_l1_losses
         else:
