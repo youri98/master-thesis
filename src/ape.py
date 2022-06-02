@@ -245,8 +245,6 @@ class APE:
         target_encoded_features = target_encoded_features.view(-1, self.timesteps, self.encoding_size)
 
         predictor_encoded_features = self.predictor_model(target_encoded_features, actions).detach()
-        # predictor_encoded_features = self.predictor_model(next_states, actions).detach()
-        # predictor_encoded_features = predictor_encoded_features.view(-1, self.timesteps, self.encoding_size)
 
 
 
@@ -260,10 +258,9 @@ class APE:
 
 
         disc_preds_fake = self.discriminator(predictor_encoded_features, actions)
-        fake_labels = torch.zeros(disc_preds_fake.shape).float().to(self.device)
-        disc_loss = self.loss_func(disc_preds_fake, fake_labels) if self.multiple_feature_pred else self.loss_func(disc_preds_fake, fake_labels)
-        if self.multiple_feature_pred:
-            disc_loss = torch.mean(disc_loss, dim=-1)
+        fake_labels = torch.zeros(disc_preds_fake.shape).float()
+        disc_loss = self.loss_func(disc_preds_fake[:, 0], fake_labels[:, 0]) if self.multiple_feature_pred else self.loss_func(disc_preds_fake, fake_labels)
+
 
         if not batch:
             return 1/disc_loss.detach().cpu().numpy()
