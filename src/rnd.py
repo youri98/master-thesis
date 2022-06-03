@@ -225,9 +225,10 @@ class RND:
         encoded_target_features = self.target_model(next_state)
         encoded_predictor_features = self.predictor_model(next_state)
         loss = (encoded_predictor_features - encoded_target_features).pow(2).mean(-1)
-        mask = torch.rand(loss.size(), device=self.device)
-        mask = (mask < self.config["predictor_proportion"]).float()
-        loss = (mask * loss).sum() / torch.max(mask.sum(), torch.Tensor([1]).to(self.device))
+        # mask = torch.rand(loss.size(), device=self.device)
+        # mask = (mask < self.config["predictor_proportion"]).float()
+        # loss = (mask * loss).sum() / torch.max(mask.sum(), torch.Tensor([1]).to(self.device))
+        loss = torch.mean(loss)
         return loss
 
     def set_from_checkpoint(self, checkpoint):
