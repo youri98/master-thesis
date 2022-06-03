@@ -127,7 +127,7 @@ class Logger:
             iteration, n_frames, (pg_losses, ext_value_losses, int_value_losses, rnd_losses,
                         disc_losses, entropies, advs, disc_l1_losses, gen_l1_losses), int_reward, ext_reward, action_prob, recording_int_rewards = args
         else:
-            iteration, n_frames, (pg_losses, ext_value_losses, int_value_losses, rnd_losses, entropies, advs, disc_l1_losses, gen_l1_losses), int_reward, ext_reward, action_prob, recording_int_rewards = args
+            iteration, n_frames, (pg_losses, ext_value_losses, int_value_losses, rnd_losses, entropies, advs), int_reward, ext_reward, action_prob, recording_int_rewards = args
         # self.running_act_prob = self.exp_avg(self.running_act_prob, action_prob)
         # self.running_int_reward = self.exp_avg(self.running_int_reward, int_reward)
         # self.running_training_logs = self.exp_avg(self.running_training_logs, np.array(training_logs))

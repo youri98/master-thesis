@@ -18,13 +18,14 @@ from torch.distributions.categorical import Categorical
 torch.backends.cudnn.benchmark = True
 
 class APE:
-    def __init__(self, timesteps=8, use_decoder=False, encoding_size=512, multiple_feature_pred=True, **config):
+    def __init__(self, timesteps=16, use_decoder=False, encoding_size=512, multiple_feature_pred=True, **config):
 
         self.config = config
         self.mini_batch_size = self.config["batch_size"]
         self.device =  torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
         self.obs_shape = self.config["obs_shape"]
-        
+        self.state_shape = self.config["state_shape"]
+
         self.use_decoder = use_decoder
         self.encoding_size = encoding_size
         self.multiple_feature_pred = multiple_feature_pred
@@ -117,24 +118,40 @@ class APE:
                ext_value.cpu().numpy().squeeze(), log_prob.cpu().numpy(), action_prob.cpu().numpy()
 
 
-    def generate_batches(self, states, next_states, actions, log_probs, advs, int_rets, ext_rets):
-        if self.config["algo"] == "APE":
-            shape = (self.config['n_mini_batch'], -1, self.timesteps) 
-            #  for example with len 1024 -> 4, 32, 8: 4 batches, 32 size of batch, 8 timesteps per individual prediction
-        else:
-            shape = (self.config['n_mini_batch'], -1)
-            #  for example with len 1024 -> 4, 32*8 = 256: 4 batches, 256 size of batch
+    def generate_batches(self, states, actions, int_returns, ext_returns, advs, log_probs, next_states):
+        states = torch.ByteTensor(states).to(self.device)
+        next_states = torch.Tensor(next_states).to(self.device)
+        actions = torch.ByteTensor(actions).to(self.device)
+        advs = torch.Tensor(advs).to(self.device)
+        int_returns = torch.Tensor(int_returns).to(self.device)
+        ext_returns = torch.Tensor(ext_returns).to(self.device)
+        log_probs = torch.Tensor(log_probs).to(self.device)
+        
+        # if self.config["algo"] == "APE":
+        #     shape = (self.config['n_mini_batch'], -1, self.timesteps) 
+        #     #  for example with len 1024 -> 4, 32, 8: 4 batches, 32 size of batch, 8 timesteps per individual prediction
+        # else:
+        #     shape = (self.config['n_mini_batch'], -1)
+        #     #  for example with len 1024 -> 4, 32*8 = 256: 4 batches, 256 size of batch
 
-        states = states.view(*shape, *self.obs_shape)
-        next_states = next_states.view(*shape, *self.obs_shape)
-        actions = actions.view(*shape, 1)
-        log_probs = log_probs.view(self.config['n_mini_batch'], -1)
-        advs = advs.view(self.config['n_mini_batch'], -1)
-        int_rets = int_rets.view(self.config['n_mini_batch'], -1)
-        ext_rets = ext_rets.view(self.config['n_mini_batch'], -1)
+        # states = states.view(*shape, *self.state_shape)
+        # next_states = next_states.view(*shape, *self.state_shape)
+        # actions = actions.view(*shape, 1)
+        # log_probs = log_probs.view(self.config['n_mini_batch'], -1)
+        # advs = advs.view(self.config['n_mini_batch'], -1)
 
-        for t in range(self.config['n_mini_batch']):
-            yield states[t], next_states[t], actions[t], log_probs[t], advs[t], int_rets[t], ext_rets[t]
+        # int_returns = int_returns.view(self.config['n_mini_batch'], -1)
+        # ext_returns = ext_returns.view(self.config['n_mini_batch'], -1)
+        indices = np.random.randint(0, len(states)//self.timesteps, (self.config["n_mini_batch"], self.mini_batch_size//self.timesteps))
+        if self.config["n_workers"] > 32:
+            fraction = 32 / self.config["n_workers"] 
+            mask = np.random.rand(indices.shape[1]) <= fraction
+            indices = indices[:, mask]
+        indices = np.concatenate([list(range(idx, idx + self.timesteps)) for batch in indices for idx in batch])
+        indices = np.reshape(indices, (self.config["n_mini_batch"], -1))
+
+        for idx in indices:
+            yield states[idx], actions[idx], int_returns[idx], ext_returns[idx], advs[idx], log_probs[idx], next_states[idx]
     
     def choose_mini_batch(self, states, actions, int_returns, ext_returns, advs, log_probs, next_states):
         states = torch.ByteTensor(states).to(self.device)
@@ -180,14 +197,15 @@ class APE:
             torch.cuda.empty_cache() 
 
             for state, action, int_return, ext_return, adv, old_log_prob, next_state in \
-                    self.choose_mini_batch(states=states,
+                    self.generate_batches(states=states,
                                            actions=actions,
                                            int_returns=int_rets,
                                            ext_returns=ext_rets,
                                            advs=advs,
                                            log_probs=log_probs,
                                            next_states=total_next_obs):
-                outputs = self.current_policy(state)
+                    
+                outputs = self.current_policy(state) #self.current_policy(state.view(-1, *state.shape[2:]))
                 int_value, ext_value, action_prob = outputs
                 dist = Categorical(action_prob)
 
@@ -203,7 +221,7 @@ class APE:
                 
                 action = action.to(torch.int64).to(self.device)
                 action = torch.nn.functional.one_hot(action, num_classes=self.n_actions)
-                action = action.view(-1, self.timesteps, self.n_actions)
+                action = action.view(self.mini_batch_size//self.timesteps, self.timesteps, self.n_actions)
                 disc_loss, gen_loss, disc_loss_l1, gen_loss_l1 = self.calculate_loss(next_state, action)
 
                 total_loss = critic_loss + pg_loss - self.config["ent_coeff"] * entropy
@@ -272,13 +290,13 @@ class APE:
 
     def calculate_loss(self, next_state, action): 
         
-        target_encoded_features = self.target_model(next_state.view(-1, *self.obs_shape))
+        target_encoded_features = self.target_model(next_state.view(-1, *self.obs_shape)) # wants flat
         
         target_encoded_features = target_encoded_features.view(-1, self.timesteps, self.encoding_size)
         # predictor_encoded_features = self.predictor_model(target_encoded_features, action).detach()
 
         # predictor_encoded_features = predictor_encoded_features.view(-1, self.timesteps, self.encoding_size)
-        predictor_encoded_features = self.predictor_model(target_encoded_features, action)
+        predictor_encoded_features = self.predictor_model(target_encoded_features, action) # wants timesteps
 
         mask = torch.randint(0, 2, size=(*predictor_encoded_features.shape[:-1], self.pred_size)).to(self.device)
         mask_inv = torch.where((mask==0)|(mask==1), mask^1, mask).to(self.device)

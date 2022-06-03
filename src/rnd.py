@@ -87,6 +87,11 @@ class RND:
         log_probs = torch.Tensor(log_probs).to(self.device)
 
         indices = np.random.randint(0, len(states), (self.config["n_mini_batch"], self.mini_batch_size))
+        if self.config["n_workers"] > 32:
+            fraction = 32 / self.config["n_workers"] 
+            mask = np.random.rand(indices.shape[1]) <= fraction
+            indices = indices[:, mask]
+        indices = np.reshape(indices, (self.config["n_mini_batch"], -1))
 
         for idx in indices:
             yield states[idx], actions[idx], int_returns[idx], ext_returns[idx], advs[idx], \

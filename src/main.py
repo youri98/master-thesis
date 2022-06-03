@@ -50,7 +50,6 @@ def train_model(config, **kwargs):
     else:
         print("params:", config)
 
-    # TODO: send workers to ape
     
     parents = []
     for worker in workers:

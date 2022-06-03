@@ -147,7 +147,7 @@ class PredictorModel(nn.Module, ABC):
 
         #     frames = torch.cat((frames, pred_frame), dim=1)
 
-        input_encoding = torch.tile(torch.unsqueeze(true_encoding[:, 0, :], dim=1), (1, 8, 1))
+        input_encoding = torch.tile(torch.unsqueeze(true_encoding[:, 0, :], dim=1), (1, self.timesteps, 1))
 
         total_input = torch.cat((input_encoding, actions), dim=-1)
 
