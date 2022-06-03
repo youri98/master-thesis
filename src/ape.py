@@ -221,7 +221,7 @@ class APE:
                 
                 action = action.to(torch.int64).to(self.device)
                 action = torch.nn.functional.one_hot(action, num_classes=self.n_actions)
-                action = action.view(self.mini_batch_size//self.timesteps, self.timesteps, self.n_actions)
+                action = action.view(-1, self.timesteps, self.n_actions)
                 disc_loss, gen_loss, disc_loss_l1, gen_loss_l1 = self.calculate_loss(next_state, action)
 
                 total_loss = critic_loss + pg_loss - self.config["ent_coeff"] * entropy
