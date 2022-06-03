@@ -1,3 +1,4 @@
+from scipy.misc import derivative
 from ape_models import PolicyModel, PredictorModel, TargetModel, DiscriminatorModel, DiscriminatorModelGRU, PredictorModelRND
 import torch
 import numpy as np
@@ -194,7 +195,7 @@ class APE:
 
         pg_losses, ext_v_losses, int_v_losses, rnd_losses, entropies, disc_losses, disc_l1_losses, gen_l1_losses = [], [], [], [], [], [], [], []
         for epoch in range(self.config["n_epochs"]):
-            torch.cuda.empty_cache() 
+            # torch.cuda.empty_cache() 
 
             for state, action, int_return, ext_return, adv, old_log_prob, next_state in \
                     self.generate_batches(states=states,
@@ -248,8 +249,10 @@ class APE:
             next_states = np.expand_dims(next_states, 0)
         next_states = np.clip((next_states - self.state_rms.mean) / (self.state_rms.var ** 0.5), -5, 5,
                               dtype="float32")  # dtype to avoid '.float()' call for pytorch.
-        torch.cuda.empty_cache() 
+        # torch.cuda.empty_cache() 
 
+        if prev_disc_loss is None:
+            prev_disc_loss = [0.5]
 
         next_states = torch.from_numpy(next_states).type(torch.float32).to(self.device)
 
@@ -280,13 +283,20 @@ class APE:
         fake_labels = torch.zeros(disc_preds_fake.shape).float().to(self.device)
         disc_loss, _ = self.loss_func(disc_preds_fake, fake_labels) if self.multiple_feature_pred else self.loss_func(disc_preds_fake, fake_labels)
 
+        derivative_disc_loss = torch.pow(disc_loss - prev_disc_loss[-1], 2)
+        variance_disc_loss = torch.pow(prev_disc_loss[-5:] - torch.mean(prev_disc_loss[-5:]), 2)
+
+        int_reward = derivative_disc_loss
+
+        prev_disc_loss.append(disc_loss)
+
         if self.multiple_feature_pred:
             disc_loss = torch.mean(disc_loss, dim=-1)
             
         if not batch:
-            return 1/disc_loss.detach().cpu().numpy()
+            return int_reward.detach().cpu().numpy()
         else:
-            return 1/disc_loss.detach().cpu().numpy().reshape((self.config["n_workers"], self.config["rollout_length"]))
+            return int_reward.detach().cpu().numpy().reshape((self.config["n_workers"], self.config["rollout_length"]))
 
     def calculate_loss(self, next_state, action): 
         
