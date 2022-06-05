@@ -251,7 +251,7 @@ class APE:
                               dtype="float32")  # dtype to avoid '.float()' call for pytorch.
         # torch.cuda.empty_cache() 
 
-        if prev_disc_loss is None:
+        if "prev_disc_loss" not in locals():
             prev_disc_loss = [0.5]
 
         next_states = torch.from_numpy(next_states).type(torch.float32).to(self.device)
@@ -281,22 +281,24 @@ class APE:
 
         disc_preds_fake = self.discriminator(predictor_encoded_features, actions)
         fake_labels = torch.zeros(disc_preds_fake.shape).float().to(self.device)
-        disc_loss, _ = self.loss_func(disc_preds_fake, fake_labels) if self.multiple_feature_pred else self.loss_func(disc_preds_fake, fake_labels)
+        disc_loss, _ = self.loss_func(disc_preds_fake, fake_labels)
+        disc_loss = disc_loss.detach().numpy()
 
-        derivative_disc_loss = torch.pow(disc_loss - prev_disc_loss[-1], 2)
-        variance_disc_loss = torch.pow(prev_disc_loss[-5:] - torch.mean(prev_disc_loss[-5:]), 2)
+        derivative_disc_loss = np.abs(disc_loss - prev_disc_loss[-1])
+        variance_disc_loss = np.var(prev_disc_loss[-5:])
 
         int_reward = derivative_disc_loss
 
         prev_disc_loss.append(disc_loss)
 
         if self.multiple_feature_pred:
-            disc_loss = torch.mean(disc_loss, dim=-1)
+            disc_loss = np.mean(disc_loss, axis=-1)
             
         if not batch:
-            return int_reward.detach().cpu().numpy()
+            return disc_loss
         else:
-            return int_reward.detach().cpu().numpy().reshape((self.config["n_workers"], self.config["rollout_length"]))
+            return (1/disc_loss).reshape((self.config["n_workers"], self.config["rollout_length"]))
+                
 
     def calculate_loss(self, next_state, action): 
         
