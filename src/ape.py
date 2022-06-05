@@ -282,22 +282,22 @@ class APE:
         disc_preds_fake = self.discriminator(predictor_encoded_features, actions)
         fake_labels = torch.zeros(disc_preds_fake.shape).float().to(self.device)
         disc_loss, _ = self.loss_func(disc_preds_fake, fake_labels)
-        disc_loss = disc_loss.detach().numpy()
+        # disc_loss = disc_loss.detach().numpy()
 
-        derivative_disc_loss = np.abs(disc_loss - prev_disc_loss[-1])
-        variance_disc_loss = np.var(prev_disc_loss[-5:])
+        # derivative_disc_loss = np.abs(disc_loss - prev_disc_loss[-1])
+        # variance_disc_loss = np.var(prev_disc_loss[-5:])
 
-        int_reward = derivative_disc_loss
+        # int_reward = derivative_disc_loss
 
-        prev_disc_loss.append(disc_loss)
+        # prev_disc_loss.append(disc_loss)
 
         if self.multiple_feature_pred:
-            disc_loss = np.mean(disc_loss, axis=-1)
+            disc_loss = torch.mean(disc_loss, dim=-1)
             
         if not batch:
             return disc_loss
         else:
-            return (1/disc_loss).reshape((self.config["n_workers"], self.config["rollout_length"]))
+            return (1/disc_loss).detach().cpu().numpy().reshape((self.config["n_workers"], self.config["rollout_length"]))
                 
 
     def calculate_loss(self, next_state, action): 
