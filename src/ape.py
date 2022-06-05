@@ -289,7 +289,7 @@ class APE:
             disc_loss_l1 = torch.mean(disc_loss_l1, dim=-1)
 
         if self.prev_disc_losses is None:
-            self.prev_disc_losses = torch.full((5, *disc_loss_l1.shape), 0.5)
+            self.prev_disc_losses = torch.full((5, *disc_loss_l1.shape), 0.5).to(self.device)
 
         derivative_disc_loss = torch.abs(disc_loss_l1 - self.prev_disc_losses[-1])
         variance_disc_loss = torch.var(self.prev_disc_losses[-5:], dim=0)
@@ -299,7 +299,7 @@ class APE:
         wandb.log({"Intrinsic Reward Variance": variance_disc_loss}, step=iteration)
 
         # prev_disc_loss.append(disc_loss)
-        self.prev_disc_losses = torch.cat([self.prev_disc_losses, torch.unsqueeze(disc_loss_l1, dim=0)])
+        self.prev_disc_losses = torch.cat([self.prev_disc_losses, torch.unsqueeze(disc_loss_l1, dim=0)]).to(self.device)
 
             
         if not batch:
