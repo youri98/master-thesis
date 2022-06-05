@@ -166,7 +166,7 @@ def train_model(config, **kwargs):
             total_next_states = np.concatenate(total_next_states)
 
             if config["algo"] == "APE":
-                total_int_rewards = agent.calculate_int_rewards(total_next_obs, total_actions) # + total actions for APE
+                total_int_rewards = agent.calculate_int_rewards(total_next_obs, total_actions, iteration=iteration) # + total actions for APE
             else:
                 total_int_rewards = agent.calculate_int_rewards(total_next_obs)
 

@@ -1,4 +1,5 @@
 from scipy.misc import derivative
+import wandb
 from ape_models import PolicyModel, PredictorModel, TargetModel, DiscriminatorModel, DiscriminatorModelGRU, PredictorModelRND
 import torch
 import numpy as np
@@ -33,6 +34,7 @@ class APE:
         self.timesteps = timesteps
         self.pred_size = self.encoding_size if self.multiple_feature_pred else 1
         self.n_actions = self.config["n_actions"]
+        self.prev_disc_losses = None
 
         self.discriminator = DiscriminatorModel(self.encoding_size, timesteps=self.timesteps, pred_size=self.pred_size, n_actions=self.config["n_actions"]).to(self.device)
         self.current_policy = PolicyModel(self.config["state_shape"], self.config["n_actions"]).to(self.device)
@@ -244,15 +246,14 @@ class APE:
         return np.mean(pg_losses), np.mean(ext_v_losses), np.mean(int_v_losses), np.mean(rnd_losses), np.mean(disc_losses), np.mean(entropies), np.mean(advs), np.mean(disc_l1_losses), np.mean(gen_l1_losses)#, int_values, int_rets, ext_values, ext_rets
     
 
-    def calculate_int_rewards(self, next_states, actions, batch=True):
+    def calculate_int_rewards(self, next_states, actions, batch=True, iteration=None):
         if not batch:
             next_states = np.expand_dims(next_states, 0)
         next_states = np.clip((next_states - self.state_rms.mean) / (self.state_rms.var ** 0.5), -5, 5,
                               dtype="float32")  # dtype to avoid '.float()' call for pytorch.
         # torch.cuda.empty_cache() 
 
-        if "prev_disc_loss" not in locals():
-            prev_disc_loss = [0.5]
+
 
         next_states = torch.from_numpy(next_states).type(torch.float32).to(self.device)
 
@@ -281,18 +282,25 @@ class APE:
 
         disc_preds_fake = self.discriminator(predictor_encoded_features, actions)
         fake_labels = torch.zeros(disc_preds_fake.shape).float().to(self.device)
-        disc_loss, _ = self.loss_func(disc_preds_fake, fake_labels)
+        disc_loss, disc_loss_l1 = self.loss_func(disc_preds_fake, fake_labels)
         # disc_loss = disc_loss.detach().numpy()
-
-        # derivative_disc_loss = np.abs(disc_loss - prev_disc_loss[-1])
-        # variance_disc_loss = np.var(prev_disc_loss[-5:])
-
-        # int_reward = derivative_disc_loss
-
-        # prev_disc_loss.append(disc_loss)
-
         if self.multiple_feature_pred:
             disc_loss = torch.mean(disc_loss, dim=-1)
+            disc_loss_l1 = torch.mean(disc_loss_l1, dim=-1)
+
+        if self.prev_disc_losses is None:
+            self.prev_disc_losses = torch.full((5, *disc_loss_l1.shape), 0.5)
+
+        derivative_disc_loss = torch.abs(disc_loss_l1 - self.prev_disc_losses[-1])
+        variance_disc_loss = torch.var(self.prev_disc_losses[-5:], dim=0)
+
+        # int_reward = derivative_disc_loss
+        wandb.log({"Intrinsic Reward Derivative": derivative_disc_loss}, step=iteration)
+        wandb.log({"Intrinsic Reward Variance": variance_disc_loss}, step=iteration)
+
+        # prev_disc_loss.append(disc_loss)
+        self.prev_disc_losses = torch.cat([self.prev_disc_losses, torch.unsqueeze(disc_loss_l1, dim=0)])
+
             
         if not batch:
             return disc_loss
