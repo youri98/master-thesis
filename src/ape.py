@@ -282,13 +282,13 @@ class APE:
 
         disc_preds_fake = self.discriminator(predictor_encoded_features, actions)
         fake_labels = torch.zeros(disc_preds_fake.shape).float().to(self.device)
-        disc_loss, disc_loss_l1 = self.loss_func(disc_preds_fake, fake_labels)
+        disc_loss, _ = self.loss_func(disc_preds_fake, fake_labels)
         # disc_loss = disc_loss.detach().numpy()
-        disc_loss, disc_loss_l1 = disc_loss.detach(), disc_loss_l1.detach()
-        
+        disc_loss = disc_loss.detach()
+
         if self.multiple_feature_pred:
             disc_loss = torch.mean(disc_loss, dim=-1)
-            disc_loss_l1 = torch.mean(disc_loss_l1, dim=-1)
+            # disc_loss_l1 = torch.mean(disc_loss_l1, dim=-1)
 
         # if self.prev_disc_losses is None:
         #     self.prev_disc_losses = torch.full((2, *disc_loss_l1.shape), 0.5).to(self.device)
@@ -296,7 +296,7 @@ class APE:
 
 
         if self.prev_disc_losses is not None:
-            self.prev_disc_losses = torch.cat([self.prev_disc_losses, torch.unsqueeze(disc_loss_l1, dim=0)]).to(self.device)
+            self.prev_disc_losses = torch.cat([self.prev_disc_losses, torch.unsqueeze(disc_loss, dim=0)]).to(self.device)
 
             variance_disc_loss = torch.var(self.prev_disc_losses[-5:], dim=0)
             variance_disc_loss = torch.mean(variance_disc_loss)
@@ -307,7 +307,7 @@ class APE:
         else:
             variance_disc_loss = 0
             derivative_disc_loss = 0
-            self.prev_disc_losses = torch.unsqueeze(disc_loss_l1, dim=0)
+            self.prev_disc_losses = torch.unsqueeze(disc_loss, dim=0)
 
  
 
