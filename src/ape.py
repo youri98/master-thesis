@@ -303,8 +303,8 @@ class APE:
             derivative_disc_loss = torch.pow(self.prev_disc_losses[-2] - self.prev_disc_losses[-1], 2)
 
         else:
-            variance_disc_loss = torch.Tensor(0)
-            derivative_disc_loss = torch.Tensor(0)
+            variance_disc_loss = torch.full(disc_loss.shape, 0)
+            derivative_disc_loss = torch.full(disc_loss.shape, 0)
             self.prev_disc_losses = torch.unsqueeze(disc_loss, dim=0)
 
  
