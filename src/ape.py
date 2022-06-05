@@ -299,10 +299,8 @@ class APE:
             self.prev_disc_losses = torch.cat([self.prev_disc_losses, torch.unsqueeze(disc_loss, dim=0)]).to(self.device)
 
             variance_disc_loss = torch.var(self.prev_disc_losses[-5:], dim=0)
-            variance_disc_loss = torch.mean(variance_disc_loss)
 
             derivative_disc_loss = torch.pow(self.prev_disc_losses[-2] - self.prev_disc_losses[-1], 2)
-            derivative_disc_loss = torch.mean(derivative_disc_loss)
 
         else:
             variance_disc_loss = 0
@@ -312,8 +310,8 @@ class APE:
  
 
         # int_reward = derivative_disc_loss
-        wandb.log({"Intrinsic Reward Derivative": derivative_disc_loss}, step=iteration)
-        wandb.log({"Intrinsic Reward Variance": variance_disc_loss}, step=iteration)
+        wandb.log({"Intrinsic Reward Derivative": torch.mean(derivative_disc_loss)}, step=iteration)
+        wandb.log({"Intrinsic Reward Variance": torch.mean(variance_disc_loss)}, step=iteration)
 
         # prev_disc_loss.append(disc_loss)
 
