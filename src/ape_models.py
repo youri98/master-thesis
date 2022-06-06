@@ -300,7 +300,7 @@ class PredictorModelRND(nn.Module, ABC):
                 nn.init.orthogonal_(layer.weight, gain=np.sqrt(2))
                 layer.bias.data.zero_()
 
-    def forward(self, inputs, actions):
+    def forward(self, inputs):
         x = inputs
         x = F.leaky_relu(self.conv1(x))
         x = F.leaky_relu(self.conv2(x))

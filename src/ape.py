@@ -20,7 +20,7 @@ from torch.distributions.categorical import Categorical
 torch.backends.cudnn.benchmark = True
 
 class APE:
-    def __init__(self, timesteps=16, use_decoder=False, encoding_size=512, multiple_feature_pred=True, **config):
+    def __init__(self, timesteps=16, rnd_predictor=True, encoding_size=512, multiple_feature_pred=True, **config):
 
         self.config = config
         self.mini_batch_size = self.config["batch_size"]
@@ -28,7 +28,7 @@ class APE:
         self.obs_shape = self.config["obs_shape"]
         self.state_shape = self.config["state_shape"]
 
-        self.use_decoder = use_decoder
+        self.rnd_predictor = rnd_predictor
         self.encoding_size = encoding_size
         self.multiple_feature_pred = multiple_feature_pred
         self.timesteps = timesteps
@@ -40,7 +40,9 @@ class APE:
         self.current_policy = PolicyModel(self.config["state_shape"], self.config["n_actions"]).to(self.device)
         self.predictor_model = PredictorModel(self.encoding_size, timesteps=self.timesteps, pred_size=self.pred_size, n_actions=self.config["n_actions"]).to(self.device)
         self.target_model = TargetModel(self.obs_shape, self.encoding_size).to(self.device)
-        # self.predictor_model = PredictorModelRND(self.obs_shape).to(self.device)
+
+        if self.rnd_predictor:
+            self.predictor_model = PredictorModelRND(self.obs_shape).to(self.device)
 
 
         for param in self.target_model.parameters():
@@ -262,12 +264,15 @@ class APE:
         actions = actions.view(-1, self.timesteps, self.n_actions)
 
         target_encoded_features = self.target_model(next_states).detach()
-        # predictor_encoded_features = self.predictor_model(target_encoded_features, actions).detach()
 
-        # predictor_encoded_features = predictor_encoded_features.view(-1, self.timesteps, self.encoding_size)
         target_encoded_features = target_encoded_features.view(-1, self.timesteps, self.encoding_size)
 
-        predictor_encoded_features = self.predictor_model(target_encoded_features, actions).detach()
+
+        if self.rnd_predictor:
+            predictor_encoded_features = self.predictor_model(next_states).detach()
+            predictor_encoded_features = predictor_encoded_features.view(-1, self.timesteps, self.encoding_size)
+        else:
+            predictor_encoded_features = self.predictor_model(target_encoded_features, actions).detach()
 
 
 
@@ -322,15 +327,20 @@ class APE:
             return (1/disc_loss).detach().cpu().numpy().reshape((self.config["n_workers"], self.config["rollout_length"]))
                 
 
-    def calculate_loss(self, next_state, action): 
+    def calculate_loss(self, next_states, actions): 
         
-        target_encoded_features = self.target_model(next_state.view(-1, *self.obs_shape)) # wants flat
-        
+        target_encoded_features = self.target_model(next_states.view(-1, *self.obs_shape)) # wants flat
         target_encoded_features = target_encoded_features.view(-1, self.timesteps, self.encoding_size)
+
+        if self.rnd_predictor:
+            predictor_encoded_features = self.predictor_model(next_states)
+            predictor_encoded_features = predictor_encoded_features.view(-1, self.timesteps, self.encoding_size)
+        else:
+            predictor_encoded_features = self.predictor_model(target_encoded_features, actions)
         # predictor_encoded_features = self.predictor_model(target_encoded_features, action).detach()
 
         # predictor_encoded_features = predictor_encoded_features.view(-1, self.timesteps, self.encoding_size)
-        predictor_encoded_features = self.predictor_model(target_encoded_features, action) # wants timesteps
+        # predictor_encoded_features = self.predictor_model(target_encoded_features, actions) # wants timesteps
 
         mask = torch.randint(0, 2, size=(*predictor_encoded_features.shape[:-1], self.pred_size)).to(self.device)
         mask_inv = torch.where((mask==0)|(mask==1), mask^1, mask).to(self.device)
@@ -363,9 +373,9 @@ class APE:
         # disc_loss = (disc_loss_true + disc_loss_fake) / 2
         # disc_loss_l1 = (disc_loss_true_l1 + disc_loss_fake_l1) / 2
 
-        disc_preds = self.discriminator(features.detach(), action)
+        disc_preds = self.discriminator(features.detach(), actions)
         disc_loss, disc_loss_l1 = self.loss_func(disc_preds, mask)
-        disc_preds = self.discriminator(features, action)
+        disc_preds = self.discriminator(features, actions)
         gen_loss, gen_loss_l1 = self.loss_func(disc_preds, mask_inv)
 
         return torch.mean(disc_loss), torch.mean(gen_loss), torch.mean(disc_loss_l1), torch.mean(gen_loss_l1)
