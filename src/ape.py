@@ -20,7 +20,7 @@ from torch.distributions.categorical import Categorical
 torch.backends.cudnn.benchmark = True
 
 class APE:
-    def __init__(self, timesteps=16, rnd_predictor=True, encoding_size=512, multiple_feature_pred=True, use_gan_loss=False, **config):
+    def __init__(self, timesteps=16, rnd_predictor=True, encoding_size=512, multiple_feature_pred=False, use_gan_loss=False, **config):
 
         self.config = config
         self.mini_batch_size = self.config["batch_size"]
