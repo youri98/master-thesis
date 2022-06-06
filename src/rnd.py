@@ -52,8 +52,8 @@ class RND:
             self.current_policy.to(self.device)
 
 
-        self.total_trainable_params = list(self.current_policy.parameters()) + list(self.predictor_model.parameters())
-        self.optimizer = Adam(self.total_trainable_params, lr=self.config["lr"])
+        self.pol_optimizer = Adam(self.current_policy.parameters(), lr=self.config["lr"])
+        self.pred_optimizer = Adam(self.predictor_model.parameters(), lr=self.config["lr"])
 
         self.state_rms = RunningMeanStd(shape=self.obs_shape)
         self.int_reward_rms = RunningMeanStd(shape=(1,))
@@ -151,8 +151,9 @@ class RND:
 
                 rnd_loss = self.calculate_rnd_loss(next_state)
 
-                total_loss = critic_loss + pg_loss - self.config["ent_coeff"] * entropy + rnd_loss
-                self.optimize(total_loss)
+                total_loss = critic_loss + pg_loss - self.config["ent_coeff"] * entropy
+                self.optimize(total_loss, self.pol_optimizer, self.current_policy)
+                self.optimize(rnd_loss, self.pred_optimizer, self.predictor_model)
 
                 pg_losses.append(pg_loss.item())
                 ext_v_losses.append(ext_value_loss.item())
@@ -162,12 +163,12 @@ class RND:
                 # https://github.com/openai/random-network-distillation/blob/f75c0f1efa473d5109d487062fd8ed49ddce6634/ppo_agent.py#L187
         return np.array(pg_losses).mean(), np.array(ext_v_losses).mean(), np.array(int_v_losses).mean(), np.array(rnd_losses).mean(), np.array(entropies).mean(), np.mean(advs)
 
-    def optimize(self, loss):
-        self.optimizer.zero_grad()
+    def optimize(self, loss, optimizer, model):
+        optimizer.zero_grad()
         loss.backward()
-        clip_grad_norm_(self.total_trainable_params)
+        clip_grad_norm_(model.parameters())
         # torch.nn.utils.clip_grad_norm_(self.total_trainable_params, 0.5)
-        self.optimizer.step()
+        optimizer.step()
 
     def get_gae(self, rewards, values, next_values, dones, gamma):
         lam = self.config["lambda"]  # Make code faster.
@@ -237,7 +238,8 @@ class RND:
         self.target_model.load_state_dict(checkpoint["target_model_state_dict"])
         for param in self.target_model.parameters():
             param.requires_grad = False
-        self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+        self.pred_optimizer.load_state_dict(checkpoint["pred_optimizer_state_dict"])
+        self.pol_optimizer.load_state_dict(checkpoint["pol_optimizer_state_dict"])
         self.state_rms.mean = checkpoint["state_rms_mean"]
         self.state_rms.var = checkpoint["state_rms_var"]
         self.state_rms.count = checkpoint["state_rms_count"]
