@@ -20,7 +20,7 @@ from torch.distributions.categorical import Categorical
 torch.backends.cudnn.benchmark = True
 
 class APE:
-    def __init__(self, timesteps=16, rnd_predictor=True, encoding_size=512, multiple_feature_pred=True, **config):
+    def __init__(self, timesteps=16, rnd_predictor=True, encoding_size=512, multiple_feature_pred=True, use_gan_loss=False, **config):
 
         self.config = config
         self.mini_batch_size = self.config["batch_size"]
@@ -29,6 +29,7 @@ class APE:
         self.state_shape = self.config["state_shape"]
 
         self.rnd_predictor = rnd_predictor
+        self.use_gan_loss = use_gan_loss
         self.encoding_size = encoding_size
         self.multiple_feature_pred = multiple_feature_pred
         self.timesteps = timesteps
@@ -375,8 +376,12 @@ class APE:
 
         disc_preds = self.discriminator(features.detach(), actions)
         disc_loss, disc_loss_l1 = self.loss_func(disc_preds, mask)
-        disc_preds = self.discriminator(features, actions)
-        gen_loss, gen_loss_l1 = self.loss_func(disc_preds, mask_inv)
+
+        if self.use_gan_loss:
+            disc_preds = self.discriminator(features, actions)
+            gen_loss, gen_loss_l1 = self.loss_func(disc_preds, mask_inv)
+        else:
+            gen_loss, gen_loss_l1 = torch.pow(predictor_encoded_features - target_encoded_features, 2), torch.Tensor(0)
 
         return torch.mean(disc_loss), torch.mean(gen_loss), torch.mean(disc_loss_l1), torch.mean(gen_loss_l1)
 
