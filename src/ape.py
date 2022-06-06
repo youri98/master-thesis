@@ -325,7 +325,7 @@ class APE:
         if not batch:
             return disc_loss
         else:
-            return (1/disc_loss).detach().cpu().numpy().reshape((self.config["n_workers"], self.config["rollout_length"]))
+            return disc_loss.detach().cpu().numpy().reshape((self.config["n_workers"], self.config["rollout_length"]))
                 
 
     def calculate_loss(self, next_states, actions): 
