@@ -153,7 +153,7 @@ class APE:
             fraction = 32 / self.config["n_workers"] 
             mask = np.random.rand(indices.shape[1]) <= fraction
             indices = indices[:, mask]
-        indices = np.concatenate([list(range(idx, idx + self.timesteps)) for batch in indices for idx in batch])
+        indices = np.concatenate([list(range(self.timesteps*idx, self.timesteps*idx + self.timesteps)) for batch in indices for idx in batch])
         indices = np.reshape(indices, (self.config["n_mini_batch"], -1))
 
         for idx in indices:
