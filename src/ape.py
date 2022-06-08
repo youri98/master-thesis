@@ -20,7 +20,7 @@ from torch.distributions.categorical import Categorical
 torch.backends.cudnn.benchmark = True
 
 class APE:
-    def __init__(self, timesteps=16, rnd_predictor=False, encoding_size=512, multiple_feature_pred=False, use_gan_loss=False, **config):
+    def __init__(self, timesteps=1, rnd_predictor=False, encoding_size=512, multiple_feature_pred=False, use_gan_loss=False, **config):
 
         self.config = config
         self.mini_batch_size = self.config["batch_size"]
@@ -194,6 +194,7 @@ class APE:
         self.state_rms.update(total_next_obs)
         total_next_obs = ((total_next_obs - self.state_rms.mean) / (self.state_rms.var ** 0.5)).clip(-5, 5)
         
+        # tile
 
         n_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0 
         device_ids = [x for x in range(n_gpus)]

@@ -134,8 +134,10 @@ class PredictorModel(nn.Module, ABC):
 
         # input_frame = torch.unsqueeze(true_encoding[:, 0, :], dim=1)
         #actions = torch.unsqueeze(actions, dim=-2)
+        frames_back = 4
         device = true_encoding.device
         h0 = torch.ones((self.n_layers, self.timesteps, self.hidden_size), dtype=torch.float32).to(device)
+
         
         # pred_frame = input_frame
         # frames = input_frame
