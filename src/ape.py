@@ -20,7 +20,7 @@ from torch.distributions.categorical import Categorical
 torch.backends.cudnn.benchmark = True
 
 class APE:
-    def __init__(self, timesteps=16, rnd_predictor=True, encoding_size=512, multiple_feature_pred=False, use_gan_loss=False, **config):
+    def __init__(self, timesteps=16, rnd_predictor=False, encoding_size=512, multiple_feature_pred=False, use_gan_loss=False, **config):
 
         self.config = config
         self.mini_batch_size = self.config["batch_size"]
@@ -325,7 +325,7 @@ class APE:
         if not batch:
             return disc_loss
         else:
-            return disc_loss.detach().cpu().numpy().reshape((self.config["n_workers"], self.config["rollout_length"]))
+            return variance_disc_loss.detach().cpu().numpy().reshape((self.config["n_workers"], self.config["rollout_length"]))
                 
 
     def calculate_loss(self, next_states, actions): 

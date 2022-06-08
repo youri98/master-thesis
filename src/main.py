@@ -224,7 +224,7 @@ if __name__ == '__main__':
     #delete_files()
     config = get_params()
     config["algo"] = "APE"
-    config["total_rollouts"] = 20
+    config["total_rollouts"] = 500
     config["verbose"] = True
     config["record"] = True
     # # run 1
@@ -232,7 +232,7 @@ if __name__ == '__main__':
     # config["total_rollouts"] = int(7)
     # config["algo"] = "RND"
     # config["verbose"] = True
-    config["interval"] = 5
+    config["interval"] = 100
 
     train_model(config)
     wandb.finish()

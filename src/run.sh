@@ -9,4 +9,4 @@
 
 module load cuda10.2/toolkit/10.2.89
 
-python run_on_hpc.py --total_rollouts 150 --record --algo RND
+python run_on_hpc.py --total_rollouts 30000 --record --algo APE
