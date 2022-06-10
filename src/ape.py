@@ -13,7 +13,6 @@ from torch.nn.parallel import DistributedDataParallel
 import os
 from torch.utils.data import TensorDataset, DataLoader
 import sys
-from sklearn.metrics import log_loss
 
 from torch.distributions.categorical import Categorical
 
