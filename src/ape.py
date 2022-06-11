@@ -173,7 +173,7 @@ class APE:
     #         yield next_states[idx]
 
     def train_rnd(self, total_next_obs):
-
+        total_next_obs = np.expand_dims(total_next_obs, 1)
         self.state_rms.update(total_next_obs)
         total_next_obs = ((total_next_obs - self.state_rms.mean) / (self.state_rms.var ** 0.5)).clip(-5, 5)
         total_next_obs = torch.Tensor(total_next_obs).to(self.device)

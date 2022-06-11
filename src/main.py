@@ -101,12 +101,13 @@ class PooledGA(pygad.GA):
 
 
         # train rnd
-        agent.train_rnd(states)
+        rnd_loss = agent.train_rnd(states)
 
-        wandb.log(episode_logs[0])
+        # wandb.log(episode_logs[0])
         wandb.log({"N Frames": self.frames})
+        wandb.log({"RND Loss": rnd_loss})
 
-        print(episode_logs, self.frames)
+        print(episode_logs, self.frames, rnd_loss)
         pop_fitness = np.array(pop_fitness)
         return pop_fitness
 
@@ -131,7 +132,7 @@ def fitness_func(solution, sol_idx):
     policy_model.load_state_dict(policy_model_weights_dict)
 
     # initialize env
-    episode_ext_reward, episode_int_reward, all_states, sum_reward, done, t = [], [], [], 0, False, 1
+    episode_ext_reward, episode_int_reward, total_obs, sum_reward, done, t = [], [], [], 0, False, 1
 
     state_shape = config["state_shape"]
     env = envs[current_pool_id] 
@@ -141,7 +142,7 @@ def fitness_func(solution, sol_idx):
     _stacked_states = stack_states(_stacked_states, state, True)
     
     # rollout length / until dead
-    while t <= config["max_frames_per_episode"] and not done:
+    while t <= config["max_frames_per_episode"] and not done and t <= 250:
         state = torch.from_numpy(_stacked_states).to(device)
         
         with torch.no_grad():
@@ -159,6 +160,7 @@ def fitness_func(solution, sol_idx):
 
 
         _stacked_states = stack_states(_stacked_states, next_state, False)
+        next_obs = _stacked_states[-1, ...]
 
         if "episode" in info and current_pool_id == 0 and done:
             visited_rooms = info["episode"]["visited_room"]
@@ -169,7 +171,7 @@ def fitness_func(solution, sol_idx):
         
         episode_ext_reward.append(r)
         t += 1
-        all_states.append(_stacked_states)
+        total_obs.append(next_obs)
 
     # r_i = agent.calculate_int_rewards(all_states)
     # r_i = agent.normalize_int_rewards(r_i)
@@ -178,9 +180,9 @@ def fitness_func(solution, sol_idx):
     sum_reward = config["ext_adv_coeff"]*sum(episode_int_reward) + config["int_adv_coeff"]*sum(episode_ext_reward)
 
     if "episode_logs" in locals():
-        return sum_reward, episode_logs, all_states
+        return sum_reward, episode_logs, total_obs
     else:
-        return sum_reward, None, all_states
+        return sum_reward, None, total_obs
 
 #######
 
