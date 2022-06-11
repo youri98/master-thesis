@@ -10,6 +10,10 @@ def conv_shape(input_dims, kernel_size, stride, padding=0):
     return ((input_dims[0] + 2 * padding - kernel_size) // stride + 1,
             (input_dims[1] + 2 * padding - kernel_size) // stride + 1)
 
+def pool_shape(input_dims, kernel_size, stride, padding=0):
+    return ((input_dims[0] + 2 * padding - kernel_size) // stride + 1,
+            (input_dims[1] + 2 * padding - kernel_size) // stride + 1)
+
 import numpy as np
 import cv2
 import gym

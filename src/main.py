@@ -1,3 +1,4 @@
+from inspect import modulesbyfile
 from config import get_params
 import numpy as np
 from numpy import concatenate
@@ -12,229 +13,344 @@ import torch
 import wandb
 import multiprocessing
 import os
+import pygad
+import time
+import gym
+import numpy as np
+import pygad.torchga
+import pygad
+import torch
+import torch.nn as nn
+from multiprocessing import Pool
+from utils import *
+import pygad.gacnn
+from torch.distributions.categorical import Categorical
 
 
 gpu = True
-
 torch.autograd.set_detect_anomaly(True)
 
+device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+
+config = get_params()
+config["algo"] = "APE"
+config["total_rollouts"] = 10
+config["verbose"] = True
+config["record"] = True
+# # run 1
+# config["env"] = "VentureNoFrameskip-v4"
+# config["total_rollouts"] = int(7)
+# config["algo"] = "RND"
+# config["verbose"] = True
+config["interval"] = 100
+
+print("STARTED")
+with open("key.txt", "r") as personal_key:
+    if personal_key is not None:
+        os.environ["WANDB_API_KEY"] = personal_key.read().strip()
+
+temp_env = gym.make(config["env"])
+config.update({"n_actions": temp_env.action_space.n})
+temp_env.close()
+config["n_workers"] = multiprocessing.cpu_count() #* torch.cuda.device_count() if torch.cuda.is_available() else multiprocessing.cpu_count()
+config.update({"batch_size": (config["rollout_length"] * config["n_workers"]) // config["n_mini_batch"]})
+config.update({"predictor_proportion": 32 / config["n_workers"]})
+workers = [Worker(i, **config) for i in range(config["n_workers"])] 
+
+agent = APE(**config)
+logger = Logger(agent, **config)
+logger.log_config_params()
+
+if not config["verbose"]:
+    os.environ["WANDB_SILENT"] = "true"   
+else:
+    print("params:", config)
+
+
+
+recording, visited_rooms, init_iteration, episode, episode_ext_reward = [], set([1]), 0, 0, 0
+if config["mode"] == "test" or config["mode"] == "train_from_chkpt":
+    if config["policy_model_name"] is not None:
+        logger.log_dir = config["policy_model_name"] 
+    chkpt = logger.load_weights(config["policy_model_name"])
+    agent.set_from_checkpoint(chkpt)
+    init_iteration = int(chkpt["iteration"])
+    episode = chkpt["episode"]
+
+
+
+
+class PooledGA(pygad.GA):
+
+    def cal_pop_fitness(self):
+        global pool
+
+        pop_fitness = pool.map(fitness_wrapper, self.population)
+        # print(pop_fitness)
+        pop_fitness = np.array(pop_fitness)
+        return pop_fitness
+
+def callback_generation(ga_instance):
+    print("Generation = {generation}".format(generation=ga_instance.generations_completed))
+    print("Fitness    = {fitness}".format(fitness=ga_instance.best_solution()[1]))
+
+def fitness_wrapper(solution):
+    return fitness_func(solution, 0)
 
 def run_workers_env_step(worker, conn):
     worker.step(conn)
 
-def train_model(config, **kwargs):
-    print("STARTED")
-    with open("key.txt", "r") as personal_key:
-        if personal_key is not None:
-            os.environ["WANDB_API_KEY"] = personal_key.read().strip()
+def fitness_func(solution, sol_idx):
+    global policy_model, envs, device, config
+    print(len(solution), sol_idx)
 
-    temp_env = gym.make(config["env"])
-    config.update({"n_actions": temp_env.action_space.n})
-    temp_env.close()
-    config["n_workers"] = multiprocessing.cpu_count() #* torch.cuda.device_count() if torch.cuda.is_available() else multiprocessing.cpu_count()
-    config.update({"batch_size": (config["rollout_length"] * config["n_workers"]) // config["n_mini_batch"]})
-    config.update({"predictor_proportion": 32 / config["n_workers"]})
-    workers = [Worker(i, **config) for i in range(config["n_workers"])] 
+    current_pool_id = multiprocessing.current_process()._identity[0] - 2 # dont get why its 2 tm 9
+    # print ('running: ', current_pool_id)
 
-    if config['algo'] == 'APE':
-        agent = APE(**kwargs, **config)
-    else:
-        agent = RND(**kwargs, **config)
+    policy_model_weights_dict = pygad.torchga.model_weights_as_dict(model=policy_model, weights_vector=solution)
+    # print("interval: ", "A ", current_pool_id)
+
+    policy_model.load_state_dict(policy_model_weights_dict)
+    # print("interval: ", "B ", current_pool_id)
+
+    input = torch.rand((1, 4, 84, 84))
+    output = policy_model(input)
+    print("interval: ", "C ", current_pool_id)
 
 
-    logger = Logger(agent, **config)
-    logger.log_config_params()
+    # initialize env
+    print("set up env: ", current_pool_id)
+
+    # play game
+    episode_ext_reward = []
+    episode_int_reward = []
+    sum_reward = 0
+    done = False
+
+    state_shape = config["state_shape"]
+
+    env = envs[current_pool_id] 
+    _stacked_states = np.zeros(state_shape, dtype=np.uint8)
+
+    state = env.reset() # firtst observation
+    _stacked_states = stack_states(_stacked_states, state, True) # stacking 4 observations
+    max_episode_steps = 20
+    # rollout length / until dead
+    t = 1
+    while t <= max_episode_steps and not done:
+
+
+        state = torch.from_numpy(_stacked_states).to(device)
+        
+        with torch.no_grad():
+            output = policy_model(torch.unsqueeze(state, 0))
+            int_value, ext_value, action_prob = output
+            dist = Categorical(action_prob)
+            action = dist.sample()
+            log_prob = dist.log_prob(action)
+
+        # action, int_value, ext_value, log_prob, action_prob = agent.get_actions_and_values(_stacked_states, batch=True)
+
+        next_state, r, done, info = env.step(action)
+
+        if t % max_episode_steps == 0:
+            done = True
+
+        _stacked_states = stack_states(_stacked_states, next_state, False)
+
+        if "episode" in info:
+            visited_rooms = info["episode"]["visited_room"]
+            logger.log_episode(episode, episode_ext_reward, visited_rooms)
+
+        # do something with states and rnd
+        r_i = 0
+        
+        episode_ext_reward.append(r)
+        episode_int_reward.append(r_i)
+        t += 1
+    print("here")
     
-    if not config["verbose"]:
-        os.environ["WANDB_SILENT"] = "true"   
-    else:
-        print("params:", config)
 
+
+    sum_reward = config["ext_adv_coeff"]*sum(episode_int_reward) + config["int_adv_coeff"]*sum(episode_ext_reward)
+    print("finished episode ", current_pool_id, " ", t, " reward ", sum_reward)
+
+    return sum_reward
+#######
+
+if config["mode"] == "test":
+    pass
+
+else:
+    rollout_base_shape = config["n_workers"], config["rollout_length"]
+
+    init_states = np.zeros(rollout_base_shape + config["state_shape"], dtype=np.uint8)
+    init_actions = np.zeros(rollout_base_shape, dtype=np.uint8)
+    init_action_probs = np.zeros(rollout_base_shape + (config["n_actions"],))
+    init_int_rewards = np.zeros(rollout_base_shape)
+    init_ext_rewards = np.zeros(rollout_base_shape)
+    init_dones = np.zeros(rollout_base_shape, dtype=np.bool)
+    init_int_values = np.zeros(rollout_base_shape)
+    init_ext_values = np.zeros(rollout_base_shape)
+    init_log_probs = np.zeros(rollout_base_shape)
+    init_next_states = np.zeros((rollout_base_shape[0],) + config["state_shape"], dtype=np.uint8)
+    init_next_obs = np.zeros(rollout_base_shape + config["obs_shape"], dtype=np.uint8)
+    recording = []
+
+    total_states = init_states
+    total_actions = init_actions
+    total_action_probs = init_action_probs
+    total_int_rewards = init_int_rewards
+    total_ext_rewards = init_ext_rewards
+    total_dones = init_dones
+    total_int_values = init_int_values
+    total_ext_values = init_ext_values
+    total_log_probs =init_log_probs
+    next_states = init_next_states
+    total_next_obs = init_next_obs
+    total_next_states = np.zeros(rollout_base_shape + config["obs_shape"], dtype=np.uint8)
+    # print("iteration how many frames", total_states.shape)
+
+    config["n_workers"] = 8
+    env_name = config["env"]
+    max_episode_steps = config["max_frames_per_episode"]
+    state_shape = config["state_shape"]
+    envs = [make_atari(env_name, max_episode_steps) for i in range(config["n_workers"])] # change this outside call    
+
+    policy_model = agent.current_policy
+    # print([(p.numel()) for p in policy_model.parameters()])
+    # print([(x,len(y)) for (x,y) in list(policy_model.named_parameters())])
+
+    # n_actions = config["n_actions"]
+    # color, w, h = config["state_shape"]
+    # conv1_out_shape = conv_shape((w, h), 8, 4)
+    # conv2_out_shape = conv_shape(conv1_out_shape, 4, 2)
+    # conv3_out_shape = conv_shape(conv2_out_shape, 3, 1)
+    # flatten_size = conv3_out_shape[0] * conv3_out_shape[1] * 64
+
+    # input_layer = pygad.cnn.Input2D(input_shape=(1, 84, 84))
+    # conv1_layer = pygad.cnn.Conv2D(num_filters=32,
+    #                             kernel_size=8,
+    #                             previous_layer=input_layer,
+    #                             activation_function="relu")
+    # conv2_layer = pygad.cnn.Conv2D(num_filters=64,
+    #                             kernel_size=4,
+    #                             previous_layer=conv1_layer,
+    #                             activation_function="relu")
+    # conv3_layer = pygad.cnn.Conv2D(num_filters=64,
+    #                             kernel_size=3,
+    #                             previous_layer=conv2_layer,
+    #                             activation_function="relu")
+    # flatten_layer = pygad.cnn.Flatten(previous_layer=conv3_layer)
+    # dense1_layer = pygad.cnn.Dense(num_neurons=448,
+    #                             previous_layer=flatten_layer,
+    #                             activation_function="relu")
+    # dense2_layer = pygad.cnn.Dense(num_neurons=448,
+    #                             previous_layer=dense1_layer,
+    #                             activation_function="relu")
+    # dense3_layer = pygad.cnn.Dense(num_neurons=n_actions,
+    #                             previous_layer=dense2_layer,
+    #                             activation_function="softmax")
+
+    # policy_model = pygad.cnn.policy_model(last_layer=dense3_layer,
+    #                     epochs=1,
+    #                     learning_rate=0.01)
+
+    # GACNN_instance = pygad.gacnn.GACNN(policy_model=policy_model,
+    #                                num_solutions=4)
+    # population_vectors = pygad.gacnn.population_as_vectors(population_networks=GACNN_instance.population_networks)
+    # print(population_vectors)
+
+    torch_ga = pygad.torchga.TorchGA(model=policy_model, num_solutions=10)
+
+    # Prepare the PyGAD parameters. Check the documentation for more information: https://pygad.readthedocs.io/en/latest/README_pygad_ReadTheDocs.html#pygad-ga-class
+    num_generations = 50  # Number of generations.
+    num_parents_mating = 5  # Number of solutions to be selected as parents in the mating pool.
+    initial_population = torch_ga.population_weights  # Initial population of network weights
+    parent_selection_type = "sss"  # Type of parent selection.
+    crossover_type = "single_point"  # Type of the crossover operator.
+    mutation_type = "random"  # Type of the mutation operator.
+    mutation_percent_genes = 10  # Percentage of genes to mutate. This parameter has no action if the parameter mutation_num_genes exists.
+    keep_parents = -1  # Number of parents to keep in the next population. -1 means keep all parents and 0 means keep nothing.
+
+
+    ga_instance = PooledGA(num_generations=num_generations,
+                        num_parents_mating=num_parents_mating,
+                        fitness_func=fitness_func,
+                        parent_selection_type=parent_selection_type,
+                        crossover_type=crossover_type,
+                        mutation_type=mutation_type,
+                        mutation_percent_genes=mutation_percent_genes,
+                        keep_parents=keep_parents,
+                        on_generation=callback_generation,
+                        initial_population=initial_population)
+                        # sol_per_pop=10,
+                        # num_genes=300)
+
+    with Pool(processes=config["n_workers"]) as pool:
+        ga_instance.run()
+
+
+
+
+
+
+
+    total_int_rewards = agent.calculate_int_rewards(total_next_obs)
+
+
+    total_int_rewards = agent.normalize_int_rewards(total_int_rewards)
     
-    parents = []
-    for worker in workers:
-        parent_conn, child_conn = Pipe()
-        p = Process(target=run_workers_env_step, args=(worker, child_conn,))
-        p.daemon = True
-        parents.append(parent_conn)
-        p.start()
 
 
+    training_logs = agent.train(states=concatenate(total_states),
+                    actions=total_actions,
+                    int_rewards=total_int_rewards,
+                    ext_rewards=total_ext_rewards,
+                    dones=total_dones,
+                    int_values=total_int_values,
+                    ext_values=total_ext_values,
+                    log_probs=concatenate(total_log_probs),
+                    next_int_values=next_int_values,
+                    next_ext_values=next_ext_values,
+                    total_next_obs=total_next_obs)
 
-    recording, visited_rooms, init_iteration, episode, episode_ext_reward = [], set([1]), 0, 0, 0
-    if config["mode"] == "test" or config["mode"] == "train_from_chkpt":
-        if config["model_name"] is not None:
-            logger.log_dir = config["model_name"] 
-        chkpt = logger.load_weights(config["model_name"])
-        agent.set_from_checkpoint(chkpt)
-        init_iteration = int(chkpt["iteration"])
-        episode = chkpt["episode"]
-    print("init: ", init_iteration)
-    if config["mode"] == "test":
-        pass
+    n_frames = total_states.shape[0] * total_states.shape[1] * total_states.shape[2] * (iteration + 1)
+    logger.log_iteration(iteration,
+                            n_frames,
+                            training_logs,
+                            total_int_rewards[0].mean(),
+                            total_ext_rewards[0].mean(),
+                            total_action_probs[0].max(-1).mean(),
+                            recording_int_rewards.mean(),
+                            )
     
-    else:
-        # print("---Pre_normalization started.---")
-        # states = []
-        # total_pre_normalization_steps = config["rollout_length"] * config["pre_normalization_steps"]
-        # actions = np.random.randint(0, config["n_actions"], (total_pre_normalization_steps, config["n_workers"]))
-        # for t in range(total_pre_normalization_steps):
-
-        #     for worker_id, parent in enumerate(parents):
-        #         parent.recv()  # Only collects next_states for normalization.
-
-        #     for parent, a in zip(parents, actions[t]):
-        #         parent.send(a)
-
-        #     for parent in parents:
-        #         s_, *_ = parent.recv()
-        #         states.append(s_[-1, ...].reshape(1, 84, 84))
-
-        #     if len(states) % (config["n_workers"] * config["rollout_length"]) == 0:
-        #         agent.state_rms.update(np.stack(states))
-        #         states = []
-        # print("---Pre_normalization is done.---")
-
-        rollout_base_shape = config["n_workers"], config["rollout_length"]
-
-        init_states = np.zeros(rollout_base_shape + config["state_shape"], dtype=np.uint8)
-        init_actions = np.zeros(rollout_base_shape, dtype=np.uint8)
-        init_action_probs = np.zeros(rollout_base_shape + (config["n_actions"],))
-        init_int_rewards = np.zeros(rollout_base_shape)
-        init_ext_rewards = np.zeros(rollout_base_shape)
-        init_dones = np.zeros(rollout_base_shape, dtype=np.bool)
-        init_int_values = np.zeros(rollout_base_shape)
-        init_ext_values = np.zeros(rollout_base_shape)
-        init_log_probs = np.zeros(rollout_base_shape)
-        init_next_states = np.zeros((rollout_base_shape[0],) + config["state_shape"], dtype=np.uint8)
-        init_next_obs = np.zeros(rollout_base_shape + config["obs_shape"], dtype=np.uint8)
-        recording = []
-
-        for iteration in tqdm(range(init_iteration, config["total_rollouts"] + 1), disable=not config["verbose"]):
-
-            total_states = init_states
-            total_actions = init_actions
-            total_action_probs =init_action_probs
-            total_int_rewards = init_int_rewards
-            total_ext_rewards = init_ext_rewards
-            total_dones = init_dones
-            total_int_values = init_int_values
-            total_ext_values = init_ext_values
-            total_log_probs =init_log_probs
-            next_states = init_next_states
-            total_next_obs = init_next_obs
-            total_next_states = np.zeros(rollout_base_shape + config["obs_shape"], dtype=np.uint8)
-            # print("iteration how many frames", total_states.shape)
-
-            logger.time_start()
-
-            for t in range(config["rollout_length"]):
-
-                for worker_id, parent in enumerate(parents):
-                    total_states[worker_id, t] = parent.recv()
-
-                total_actions[:, t], total_int_values[:, t], total_ext_values[:, t], total_log_probs[:, t], \
-                total_action_probs[:, t] = agent.get_actions_and_values(total_states[:, t], batch=True)
-                for parent, a in zip(parents, total_actions[:, t]):
-                    parent.send(a)
-
-                infos = []
-                for worker_id, parent in enumerate(parents):
-                    s_, r, d, info = parent.recv()
-                    infos.append(info)
-                    total_ext_rewards[worker_id, t] = r
-                    total_dones[worker_id, t] = d
-                    next_states[worker_id] = s_
-                    total_next_obs[worker_id, t] = s_[-1, ...]
-
-                    if worker_id == 0:
-                        recording.append(s_[-1, ...])
-
-                episode_ext_reward += total_ext_rewards[0, t]
-                if total_dones[0, t]:
-                    episode += 1
-                    if "episode" in infos[0]:
-                        visited_rooms = infos[0]["episode"]["visited_room"]
-                        logger.log_episode(episode, episode_ext_reward, visited_rooms)
-                    episode_ext_reward = 0
 
 
-            logger.time_stop("env step time")
-            logger.time_start()
-            total_next_obs = np.concatenate(total_next_obs)
-            total_actions = np.concatenate(total_actions)
-            total_next_states = np.concatenate(total_next_states)
-
-            if config["algo"] == "APE":
-                total_int_rewards = agent.calculate_int_rewards(total_next_obs, total_actions, iteration=iteration) # + total actions for APE
-            else:
-                total_int_rewards = agent.calculate_int_rewards(total_next_obs)
-
-            recording_int_rewards = total_int_rewards[0, ...]
-
-            _, next_int_values, next_ext_values, * \
-                _ = agent.get_actions_and_values(next_states, batch=True)
-
-            total_int_rewards = agent.normalize_int_rewards(total_int_rewards)
-            
-
-
-            training_logs = agent.train(states=concatenate(total_states),
-                            actions=total_actions,
-                            int_rewards=total_int_rewards,
-                            ext_rewards=total_ext_rewards,
-                            dones=total_dones,
-                            int_values=total_int_values,
-                            ext_values=total_ext_values,
-                            log_probs=concatenate(total_log_probs),
-                            next_int_values=next_int_values,
-                            next_ext_values=next_ext_values,
-                            total_next_obs=total_next_obs)
-
-            logger.time_stop("training time")
-            n_frames = total_states.shape[0] * total_states.shape[1] * total_states.shape[2] * (iteration + 1)
-            logger.time_start()
-            logger.log_iteration(iteration,
-                                    n_frames,
-                                    training_logs,
-                                    total_int_rewards[0].mean(),
-                                    total_ext_rewards[0].mean(),
-                                    total_action_probs[0].max(-1).mean(),
-                                    recording_int_rewards.mean(),
-                                    )
-            
-            recording = np.stack(recording)
-            logger.log_recording(iteration, recording)
-            logger.time_stop("logging time")
-            logger.time_start()
-            logger.save_recording_local(iteration, recording)
-
-            if iteration % config["interval"] == 0 or iteration == config["total_rollouts"]:
-                logger.save_params(episode, iteration)
-                logger.save_score_to_json()
-                logger.time_stop()
-
-            logger.time_stop("param saving time")
-            recording = []
-            recording_int_rewards = []
+    # if iteration % config["interval"] == 0 or iteration == config["total_rollouts"]:
+    #     logger.save_params(episode, iteration)
+    #     logger.save_score_to_json()
+    #     logger.time_stop()
 
 
 
-if __name__ == '__main__':
-    #delete_files()
-    config = get_params()
-    config["algo"] = "APE"
-    config["total_rollouts"] = 500
-    config["verbose"] = True
-    config["record"] = True
-    # # run 1
-    # config["env"] = "VentureNoFrameskip-v4"
-    # config["total_rollouts"] = int(7)
-    # config["algo"] = "RND"
-    # config["verbose"] = True
-    config["interval"] = 100
+    # print("---Pre_normalization started.---")
+    # states = []
+    # total_pre_normalization_steps = config["rollout_length"] * config["pre_normalization_steps"]
+    # actions = np.random.randint(0, config["n_actions"], (total_pre_normalization_steps, config["n_workers"]))
+    # for t in range(total_pre_normalization_steps):
 
-    train_model(config)
-    wandb.finish()
+    #     for worker_id, parent in enumerate(parents):
+    #         parent.recv()  # Only collects next_states for normalization.
 
+    #     for parent, a in zip(parents, actions[t]):
+    #         parent.send(a)
 
+    #     for parent in parents:
+    #         s_, *_ = parent.recv()
+    #         states.append(s_[-1, ...].reshape(1, 84, 84))
+
+    #     if len(states) % (config["n_workers"] * config["rollout_length"]) == 0:
+    #         agent.state_rms.update(np.stack(states))
+    #         states = []
+    # print("---Pre_normalization is done.---")

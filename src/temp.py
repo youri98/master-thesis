@@ -11,17 +11,19 @@ len_states = 128* parallel_envs
 
 rollout_len = 128
 
+frame = torch.rand((1, 9,9))
+output = torch.nn.MaxPool2d(2,2)(frame)
+print(output.shape)
 
 
+# iteration_idx = [x for x in range(rollout_len//timesteps)] * n_min_batch
+# iteration_idx = np.array(iteration_idx).reshape(4, -1)
 
-iteration_idx = [x for x in range(rollout_len//timesteps)] * n_min_batch
-iteration_idx = np.array(iteration_idx).reshape(4, -1)
-
-mask = np.random.rand(4, 128//timesteps) <= fraction
-iteration_idx = [iteration_idx[batch][mask[batch]] for batch in range(n_min_batch)]
-iteration_idx = [list(range(timesteps*idx, timesteps*idx +timesteps)) for batch_idx in iteration_idx for idx in batch_idx]
-print(mask)
-print(iteration_idx)
+# mask = np.random.rand(4, 128//timesteps) <= fraction
+# iteration_idx = [iteration_idx[batch][mask[batch]] for batch in range(n_min_batch)]
+# iteration_idx = [list(range(timesteps*idx, timesteps*idx +timesteps)) for batch_idx in iteration_idx for idx in batch_idx]
+# print(mask)
+# print(iteration_idx)
 # iteration_idx = np.random.choice(sub_array, ) for sub_array in iteration_idx
 
 

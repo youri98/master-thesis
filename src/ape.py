@@ -13,7 +13,7 @@ from torch.nn.parallel import DistributedDataParallel
 import os
 from torch.utils.data import TensorDataset, DataLoader
 import sys
-
+import pygad
 from torch.distributions.categorical import Categorical
 
 torch.backends.cudnn.benchmark = True
@@ -36,13 +36,12 @@ class APE:
         self.n_actions = self.config["n_actions"]
         self.prev_disc_losses = None
 
-        self.discriminator = DiscriminatorModel(self.encoding_size, timesteps=self.timesteps, pred_size=self.pred_size, n_actions=self.config["n_actions"]).to(self.device)
         self.current_policy = PolicyModel(self.config["state_shape"], self.config["n_actions"]).to(self.device)
-        self.predictor_model = PredictorModel(self.encoding_size, timesteps=self.timesteps, pred_size=self.pred_size, n_actions=self.config["n_actions"]).to(self.device)
+        self.predictor_model = PredictorModelRND(self.obs_shape).to(self.device)
         self.target_model = TargetModel(self.obs_shape, self.encoding_size).to(self.device)
 
-        if self.rnd_predictor:
-            self.predictor_model = PredictorModelRND(self.obs_shape).to(self.device)
+        self.current_policy.requires_grad_(False)
+    
 
 
         for param in self.target_model.parameters():
@@ -57,25 +56,18 @@ class APE:
     
             self.predictor_model = DataParallel(self.predictor_model)
             self.current_policy = DataParallel(self.current_policy)
-            self.discriminator = DataParallel(self.discriminator)
             self.target_model = DataParallel(self.target_model)
             self.target_model.to(self.device)
             self.predictor_model.to(self.device)
             self.current_policy.to(self.device)
-            self.discriminator.to(self.device)
 
-        self.pol_optimizer = Adam(self.current_policy.parameters(), lr=self.config["lr"])
+        # self.pol_optimizer = Adam(self.current_policy.parameters(), lr=self.config["lr"])
         self.pred_optimizer = Adam(self.predictor_model.parameters(), lr=self.config["lr"])
-        self.disc_optimizer = Adam(self.discriminator.parameters(), lr=self.config["lr"])
 
         # consider LBFGS
 
         self.state_rms = RunningMeanStd(shape=self.obs_shape)
         self.int_reward_rms = RunningMeanStd(shape=(1,))
-        self.loss_func = lambda y_hat,y: (torch.nn.BCELoss(reduction='none')(y_hat, y.float()), torch.nn.L1Loss(reduction='none')(y_hat, y.float()))# if self.pred_size == 1 else torch.nn.L1Loss() 
-        self.loss_l1 = lambda y_hat,y: torch.nn.L1Loss(reduction='none')(y_hat, y.float())# if self.pred_size == 1 else torch.nn.L1Loss() 
-
-        self.mse_loss = torch.nn.MSELoss()
 
         for param in self.target_model.parameters():
             param.requires_grad = False
@@ -196,9 +188,8 @@ class APE:
         # tile
 
         n_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0 
-        device_ids = [x for x in range(n_gpus)]
 
-        pg_losses, ext_v_losses, int_v_losses, rnd_losses, entropies, disc_losses, disc_l1_losses, gen_l1_losses = [], [], [], [], [], [], [], []
+        pg_losses, ext_v_losses, int_v_losses, rnd_losses, entropies = [], [], [], [], []
         for epoch in range(self.config["n_epochs"]):
             # torch.cuda.empty_cache() 
 
@@ -225,31 +216,24 @@ class APE:
 
                 critic_loss = 0.5 * (int_value_loss + ext_value_loss)
                 
-                action = action.to(torch.int64).to(self.device)
-                action = torch.nn.functional.one_hot(action, num_classes=self.n_actions)
-                action = action.view(-1, self.timesteps, self.n_actions)
-                disc_loss, gen_loss, disc_loss_l1, gen_loss_l1 = self.calculate_loss(next_state, action)
+                rnd_loss = self.calculate_loss(next_state)
 
                 total_loss = critic_loss + pg_loss - self.config["ent_coeff"] * entropy
 
                 self.optimize(total_loss, self.pol_optimizer, self.current_policy)
-                self.optimize(gen_loss, self.pred_optimizer, self.predictor_model)
-                self.optimize(disc_loss, self.disc_optimizer, self.discriminator)
+                self.optimize(rnd_loss, self.pred_optimizer, self.predictor_model)
 
                 pg_losses.append(pg_loss.item())
                 ext_v_losses.append(ext_value_loss.item())
                 int_v_losses.append(int_value_loss.item())
-                rnd_losses.append(gen_loss.item())
-                disc_losses.append(disc_loss.item())
+                rnd_losses.append(rnd_loss.item())
                 entropies.append(entropy.item())
-                disc_l1_losses.append(disc_loss_l1.item())
-                gen_l1_losses.append(gen_loss_l1.item())
             # https://github.com/openai/random-network-distillation/blob/f75c0f1efa473d5109d487062fd8ed49ddce6634/ppo_agent.py#L187
 
-        return np.mean(pg_losses), np.mean(ext_v_losses), np.mean(int_v_losses), np.mean(rnd_losses), np.mean(disc_losses), np.mean(entropies), np.mean(advs), np.mean(disc_l1_losses), np.mean(gen_l1_losses)#, int_values, int_rets, ext_values, ext_rets
+        return np.mean(pg_losses), np.mean(ext_v_losses), np.mean(int_v_losses), np.mean(rnd_losses), np.mean(entropies), np.mean(advs)
     
 
-    def calculate_int_rewards(self, next_states, actions, batch=True, iteration=None):
+    def calculate_int_rewards(self, next_states, batch=True, iteration=None):
         if not batch:
             next_states = np.expand_dims(next_states, 0)
         next_states = np.clip((next_states - self.state_rms.mean) / (self.state_rms.var ** 0.5), -5, 5,
@@ -267,123 +251,29 @@ class APE:
         target_encoded_features = self.target_model(next_states).detach()
 
         target_encoded_features = target_encoded_features.view(-1, self.timesteps, self.encoding_size)
+        predictor_encoded_features = self.predictor_model(next_states).detach()
+        predictor_encoded_features = predictor_encoded_features.view(-1, self.timesteps, self.encoding_size)
 
-
-        if self.rnd_predictor:
-            predictor_encoded_features = self.predictor_model(next_states).detach()
-            predictor_encoded_features = predictor_encoded_features.view(-1, self.timesteps, self.encoding_size)
-        else:
-            predictor_encoded_features = self.predictor_model(target_encoded_features, actions).detach()
-
-
-
-        mask = torch.randint(0, 2, size=(*predictor_encoded_features.shape[:-1], self.pred_size)).to(self.device)
-        #mask = torch.kron(mask, torch.ones(self.timesteps, dtype=torch.uint8))
-        mask_inv = torch.where((mask==0)|(mask==1), mask^1, mask).to(self.device)
-
-        temp_p = predictor_encoded_features*mask_inv
-        temp_t = target_encoded_features*mask
-        features = (temp_p + temp_t).to(self.device)
-
-
-        disc_preds = self.discriminator(features, actions)
-        fake_labels = torch.zeros(disc_preds.shape).float().to(self.device)
-        disc_loss, _ = self.loss_func(disc_preds, mask)
-        # disc_loss = disc_loss.detach().numpy()
-        disc_loss = disc_loss.detach()
-
-        if self.multiple_feature_pred:
-            disc_loss = torch.mean(disc_loss, dim=-1)
-            # disc_loss_l1 = torch.mean(disc_loss_l1, dim=-1)
-
-        # if self.prev_disc_losses is None:
-        #     self.prev_disc_losses = torch.full((2, *disc_loss_l1.shape), 0.5).to(self.device)
-
-
-
-        if self.prev_disc_losses is not None:
-            self.prev_disc_losses = torch.cat([self.prev_disc_losses, torch.unsqueeze(disc_loss, dim=0)]).to(self.device)
-
-            variance_disc_loss = torch.var(self.prev_disc_losses[-5:], dim=0)
-
-            derivative_disc_loss = torch.pow(self.prev_disc_losses[-2] - self.prev_disc_losses[-1], 2)
-
-        else:
-            variance_disc_loss = torch.full(disc_loss.shape, 0.0)
-            derivative_disc_loss = torch.full(disc_loss.shape, 0.0)
-            self.prev_disc_losses = torch.unsqueeze(disc_loss, dim=0)
-
- 
-
-        # int_reward = derivative_disc_loss
-        wandb.log({"Intrinsic Reward Derivative": torch.mean(derivative_disc_loss)}, step=iteration)
-        wandb.log({"Intrinsic Reward Variance": torch.mean(variance_disc_loss)}, step=iteration)
-
-        # prev_disc_loss.append(disc_loss)
-
+        loss = torch.mean(torch.pow(target_encoded_features - predictor_encoded_features, 2), 1)
             
         if not batch:
-            return disc_loss
+            return loss
         else:
-            return variance_disc_loss.detach().cpu().numpy().reshape((self.config["n_workers"], self.config["rollout_length"]))
+            return loss.detach().cpu().numpy().reshape((self.config["n_workers"], self.config["rollout_length"]))
                 
 
-    def calculate_loss(self, next_states, actions): 
+    def calculate_loss(self, next_states): 
         
         target_encoded_features = self.target_model(next_states.view(-1, *self.obs_shape)) # wants flat
         target_encoded_features = target_encoded_features.view(-1, self.timesteps, self.encoding_size)
 
-        if self.rnd_predictor:
-            predictor_encoded_features = self.predictor_model(next_states)
-            predictor_encoded_features = predictor_encoded_features.view(-1, self.timesteps, self.encoding_size)
-        else:
-            predictor_encoded_features = self.predictor_model(target_encoded_features, actions)
-        # predictor_encoded_features = self.predictor_model(target_encoded_features, action).detach()
+        predictor_encoded_features = self.predictor_model(next_states)
+        predictor_encoded_features = predictor_encoded_features.view(-1, self.timesteps, self.encoding_size)
 
-        # predictor_encoded_features = predictor_encoded_features.view(-1, self.timesteps, self.encoding_size)
-        # predictor_encoded_features = self.predictor_model(target_encoded_features, actions) # wants timesteps
+  
+        loss = torch.pow(predictor_encoded_features - target_encoded_features, 2)
 
-        mask = torch.randint(0, 2, size=(*predictor_encoded_features.shape[:-1], self.pred_size)).to(self.device)
-        mask_inv = torch.where((mask==0)|(mask==1), mask^1, mask).to(self.device)
-            
-        temp_p = predictor_encoded_features*mask_inv
-        temp_t = target_encoded_features*mask
-        features = temp_p + temp_t
-
-        # predictor_encoded_features = torch.ones(predictor_encoded_features.shape)
-        # target_encoded_features = torch.zeros(target_encoded_features.shape)
-
-        # gen_disc_preds = self.discriminator(predictor_encoded_features, action)
-        # gen_labels = torch.ones(gen_disc_preds.shape).float().to(self.device)
-        # gen_loss, gen_loss_l1 = self.loss_func(gen_disc_preds[:, 0], gen_labels[:, 0]) if self.multiple_feature_pred else self.loss_func(gen_disc_preds, gen_labels)
-        # gen_loss = torch.mean(gen_loss)
-        # gen_loss_l1 = torch.mean(gen_loss_l1)
-
-        # disc_preds_true = self.discriminator(target_encoded_features, action)
-        # true_labels = torch.ones(disc_preds_true.shape).float().to(self.device)
-        # disc_loss_true, disc_loss_true_l1 = self.loss_func(disc_preds_true[:, 0], true_labels[:, 0]) if self.multiple_feature_pred else self.loss_func(disc_preds_true, true_labels)
-        # disc_loss_true = torch.mean(disc_loss_true)
-        # disc_loss_true_l1 = torch.mean(disc_loss_true_l1)
-
-        # disc_preds_fake = self.discriminator(predictor_encoded_features.detach(), action)
-        # fake_labels = torch.zeros(disc_preds_fake.shape).float().to(self.device)
-        # disc_loss_fake, disc_loss_fake_l1 = self.loss_func(disc_preds_fake[:, 0], fake_labels[:, 0]) if self.multiple_feature_pred else self.loss_func(disc_preds_fake, fake_labels)
-        # disc_loss_fake = torch.mean(disc_loss_fake)
-        # disc_loss_fake_l1 = torch.mean(disc_loss_fake_l1)
-
-        # disc_loss = (disc_loss_true + disc_loss_fake) / 2
-        # disc_loss_l1 = (disc_loss_true_l1 + disc_loss_fake_l1) / 2
-
-        disc_preds = self.discriminator(features.detach(), actions)
-        disc_loss, disc_loss_l1 = self.loss_func(disc_preds, mask)
-
-        if self.use_gan_loss:
-            disc_preds = self.discriminator(features, actions)
-            gen_loss, gen_loss_l1 = self.loss_func(disc_preds, mask_inv)
-        else:
-            gen_loss, gen_loss_l1 = torch.pow(predictor_encoded_features - target_encoded_features, 2), torch.Tensor(0)
-
-        return torch.mean(disc_loss), torch.mean(gen_loss), torch.mean(disc_loss_l1), torch.mean(gen_loss_l1)
+        return torch.mean(loss)
 
     def set_from_checkpoint(self, checkpoint): 
         self.current_policy.load_state_dict(checkpoint["current_policy_state_dict"])
