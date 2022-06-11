@@ -165,72 +165,31 @@ class APE:
             yield states[idx], actions[idx], int_returns[idx], ext_returns[idx], advs[idx], \
                   log_probs[idx], next_states[idx]
 
-    def train(self, states, actions, int_rewards,
-              ext_rewards, dones, int_values, ext_values,
-              log_probs, next_int_values, next_ext_values, total_next_obs):
+    # def choose_mini_batch_rnd(self, next_states):
+    #     next_states = torch.Tensor(next_states).to(self.device)
+    #     indices = np.random.randint(0, len(next_states), (self.config["n_mini_batch"], self.mini_batch_size))
 
-        int_rets = self.get_gae(int_rewards, int_values, next_int_values,
-                                np.zeros_like(dones), self.config["int_gamma"])
-        ext_rets = self.get_gae(ext_rewards, ext_values, next_ext_values,
-                                dones, self.config["ext_gamma"])
+    #     for idx in indices:
+    #         yield next_states[idx]
 
-        ext_values = np.concatenate(ext_values)
-        ext_advs = ext_rets - ext_values
-
-        int_values = np.concatenate(int_values)
-        int_advs = int_rets - int_values
-
-        advs = ext_advs * self.config["ext_adv_coeff"] + int_advs * self.config["int_adv_coeff"]
+    def train_rnd(self, total_next_obs):
 
         self.state_rms.update(total_next_obs)
         total_next_obs = ((total_next_obs - self.state_rms.mean) / (self.state_rms.var ** 0.5)).clip(-5, 5)
-        
-        # tile
+        total_next_obs = torch.Tensor(total_next_obs).to(self.device)
 
-        n_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0 
-
-        pg_losses, ext_v_losses, int_v_losses, rnd_losses, entropies = [], [], [], [], []
+        rnd_losses = []
         for epoch in range(self.config["n_epochs"]):
-            # torch.cuda.empty_cache() 
+            for next_state in torch.split(total_next_obs, int(np.ceil(len(total_next_obs)/self.config["n_mini_batch"]))):
+ 
+                rnd_loss = self.calculate_rnd_loss(next_state)
 
-            for state, action, int_return, ext_return, adv, old_log_prob, next_state in \
-                    self.generate_batches(states=states,
-                                           actions=actions,
-                                           int_returns=int_rets,
-                                           ext_returns=ext_rets,
-                                           advs=advs,
-                                           log_probs=log_probs,
-                                           next_states=total_next_obs):
-                    
-                outputs = self.current_policy(state) #self.current_policy(state.view(-1, *state.shape[2:]))
-                int_value, ext_value, action_prob = outputs
-                dist = Categorical(action_prob)
-
-                entropy = dist.entropy().mean()
-                new_log_prob = dist.log_prob(action)
-                ratio = (new_log_prob - old_log_prob).exp()
-                pg_loss = self.compute_pg_loss(ratio, adv)
-
-                int_value_loss = self.mse_loss(int_value.squeeze(-1), int_return)
-                ext_value_loss = self.mse_loss(ext_value.squeeze(-1), ext_return)
-
-                critic_loss = 0.5 * (int_value_loss + ext_value_loss)
-                
-                rnd_loss = self.calculate_loss(next_state)
-
-                total_loss = critic_loss + pg_loss - self.config["ent_coeff"] * entropy
-
-                self.optimize(total_loss, self.pol_optimizer, self.current_policy)
                 self.optimize(rnd_loss, self.pred_optimizer, self.predictor_model)
 
-                pg_losses.append(pg_loss.item())
-                ext_v_losses.append(ext_value_loss.item())
-                int_v_losses.append(int_value_loss.item())
                 rnd_losses.append(rnd_loss.item())
-                entropies.append(entropy.item())
             # https://github.com/openai/random-network-distillation/blob/f75c0f1efa473d5109d487062fd8ed49ddce6634/ppo_agent.py#L187
 
-        return np.mean(pg_losses), np.mean(ext_v_losses), np.mean(int_v_losses), np.mean(rnd_losses), np.mean(entropies), np.mean(advs)
+        return np.mean(rnd_losses)
     
 
     def calculate_int_rewards(self, next_states, batch=True, iteration=None):
@@ -239,9 +198,6 @@ class APE:
         next_states = np.clip((next_states - self.state_rms.mean) / (self.state_rms.var ** 0.5), -5, 5,
                               dtype="float32")  # dtype to avoid '.float()' call for pytorch.
         # torch.cuda.empty_cache() 
-
-
-
         next_states = torch.from_numpy(next_states).type(torch.float32).to(self.device)
 
         actions = torch.from_numpy(actions).to(torch.int64).to(self.device)
@@ -262,18 +218,15 @@ class APE:
             return loss.detach().cpu().numpy().reshape((self.config["n_workers"], self.config["rollout_length"]))
                 
 
-    def calculate_loss(self, next_states): 
-        
-        target_encoded_features = self.target_model(next_states.view(-1, *self.obs_shape)) # wants flat
-        target_encoded_features = target_encoded_features.view(-1, self.timesteps, self.encoding_size)
-
+    def calculate_rnd_loss(self, next_states): 
+        target_encoded_features = self.target_model(next_states) # wants flat
         predictor_encoded_features = self.predictor_model(next_states)
-        predictor_encoded_features = predictor_encoded_features.view(-1, self.timesteps, self.encoding_size)
-
-  
         loss = torch.pow(predictor_encoded_features - target_encoded_features, 2)
+        mask = np.random.choice([1,0], size=len(target_encoded_features), p=[self.config["predictor_proportion"], 1 - self.config["predictor_proportion"]])
 
-        return torch.mean(loss)
+        loss = torch.mean(loss[mask])
+
+        return loss
 
     def set_from_checkpoint(self, checkpoint): 
         self.current_policy.load_state_dict(checkpoint["current_policy_state_dict"])

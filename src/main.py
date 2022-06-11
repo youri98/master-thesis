@@ -25,7 +25,7 @@ from multiprocessing import Pool
 from utils import *
 import pygad.gacnn
 from torch.distributions.categorical import Categorical
-
+from collections import deque
 
 gpu = True
 torch.autograd.set_detect_anomaly(True)
@@ -54,7 +54,7 @@ config.update({"n_actions": temp_env.action_space.n})
 temp_env.close()
 config["n_workers"] = multiprocessing.cpu_count() #* torch.cuda.device_count() if torch.cuda.is_available() else multiprocessing.cpu_count()
 config.update({"batch_size": (config["rollout_length"] * config["n_workers"]) // config["n_mini_batch"]})
-config.update({"predictor_proportion": 32 / config["n_workers"]})
+config.update({"predictor_proportion": min(1, 32 / config["n_workers"])})
 workers = [Worker(i, **config) for i in range(config["n_workers"])] 
 
 agent = APE(**config)
@@ -83,14 +83,35 @@ if config["mode"] == "test" or config["mode"] == "train_from_chkpt":
 class PooledGA(pygad.GA):
 
     def cal_pop_fitness(self):
-        global pool
+        if not hasattr(self, "frames"):
+            self.frames = 0
+        # if not hasattr(self, "iteration"):
+        #     self.iteration = 0
+        
+        global pool, agent
 
-        pop_fitness = pool.map(fitness_wrapper, self.population)
-        # print(pop_fitness)
+        output = pool.map(fitness_wrapper, self.population)
+        pop_fitness, episode_logs, states =  zip(*output)
+
+        states = np.concatenate(states)
+
+        episode_logs = list(filter(None, episode_logs))
+
+        self.frames += states.shape[0] * states.shape[1]
+
+
+        # train rnd
+        agent.train_rnd(states)
+
+        wandb.log(episode_logs[0])
+        wandb.log({"N Frames": self.frames})
+
+        print(episode_logs, self.frames)
         pop_fitness = np.array(pop_fitness)
         return pop_fitness
 
 def callback_generation(ga_instance):
+
     print("Generation = {generation}".format(generation=ga_instance.generations_completed))
     print("Fitness    = {fitness}".format(fitness=ga_instance.best_solution()[1]))
 
@@ -101,81 +122,66 @@ def run_workers_env_step(worker, conn):
     worker.step(conn)
 
 def fitness_func(solution, sol_idx):
-    global policy_model, envs, device, config
-    print(len(solution), sol_idx)
+    global policy_model, envs, device, config, agent
+    # print(len(solution), sol_idx)
 
     current_pool_id = multiprocessing.current_process()._identity[0] - 2 # dont get why its 2 tm 9
-    # print ('running: ', current_pool_id)
-
+    print ('running: ', current_pool_id)
     policy_model_weights_dict = pygad.torchga.model_weights_as_dict(model=policy_model, weights_vector=solution)
-    # print("interval: ", "A ", current_pool_id)
-
     policy_model.load_state_dict(policy_model_weights_dict)
-    # print("interval: ", "B ", current_pool_id)
-
-    input = torch.rand((1, 4, 84, 84))
-    output = policy_model(input)
-    print("interval: ", "C ", current_pool_id)
-
 
     # initialize env
-    print("set up env: ", current_pool_id)
-
-    # play game
-    episode_ext_reward = []
-    episode_int_reward = []
-    sum_reward = 0
-    done = False
+    episode_ext_reward, episode_int_reward, all_states, sum_reward, done, t = [], [], [], 0, False, 1
 
     state_shape = config["state_shape"]
-
     env = envs[current_pool_id] 
-    _stacked_states = np.zeros(state_shape, dtype=np.uint8)
-
     state = env.reset() # firtst observation
-    _stacked_states = stack_states(_stacked_states, state, True) # stacking 4 observations
-    max_episode_steps = 20
+
+    _stacked_states = np.zeros(state_shape, dtype=np.uint8) # stacking 4 observations
+    _stacked_states = stack_states(_stacked_states, state, True)
+    
     # rollout length / until dead
-    t = 1
-    while t <= max_episode_steps and not done:
-
-
+    while t <= config["max_frames_per_episode"] and not done:
         state = torch.from_numpy(_stacked_states).to(device)
         
         with torch.no_grad():
-            output = policy_model(torch.unsqueeze(state, 0))
+            output = policy_model(torch.unsqueeze(state.type(torch.float), 0))
             int_value, ext_value, action_prob = output
             dist = Categorical(action_prob)
             action = dist.sample()
             log_prob = dist.log_prob(action)
 
         # action, int_value, ext_value, log_prob, action_prob = agent.get_actions_and_values(_stacked_states, batch=True)
-
         next_state, r, done, info = env.step(action)
 
         if t % max_episode_steps == 0:
             done = True
 
+
         _stacked_states = stack_states(_stacked_states, next_state, False)
 
-        if "episode" in info:
+        if "episode" in info and current_pool_id == 0 and done:
             visited_rooms = info["episode"]["visited_room"]
-            logger.log_episode(episode, episode_ext_reward, visited_rooms)
+            episode = info["episode"]
 
-        # do something with states and rnd
-        r_i = 0
+            episode_logs = {"Ep Visited Rooms": list(visited_rooms), "Episode Ext Reward": sum(episode_ext_reward)}
+
         
         episode_ext_reward.append(r)
-        episode_int_reward.append(r_i)
         t += 1
-    print("here")
-    
+        all_states.append(_stacked_states)
 
+    # r_i = agent.calculate_int_rewards(all_states)
+    # r_i = agent.normalize_int_rewards(r_i)
+    episode_int_reward = [0]
 
     sum_reward = config["ext_adv_coeff"]*sum(episode_int_reward) + config["int_adv_coeff"]*sum(episode_ext_reward)
-    print("finished episode ", current_pool_id, " ", t, " reward ", sum_reward)
 
-    return sum_reward
+    if "episode_logs" in locals():
+        return sum_reward, episode_logs, all_states
+    else:
+        return sum_reward, None, all_states
+
 #######
 
 if config["mode"] == "test":
@@ -216,52 +222,12 @@ else:
     max_episode_steps = config["max_frames_per_episode"]
     state_shape = config["state_shape"]
     envs = [make_atari(env_name, max_episode_steps) for i in range(config["n_workers"])] # change this outside call    
-
+    episode_logs = {}
     policy_model = agent.current_policy
-    # print([(p.numel()) for p in policy_model.parameters()])
-    # print([(x,len(y)) for (x,y) in list(policy_model.named_parameters())])
+    rnd = agent.predictor_model
+  
 
-    # n_actions = config["n_actions"]
-    # color, w, h = config["state_shape"]
-    # conv1_out_shape = conv_shape((w, h), 8, 4)
-    # conv2_out_shape = conv_shape(conv1_out_shape, 4, 2)
-    # conv3_out_shape = conv_shape(conv2_out_shape, 3, 1)
-    # flatten_size = conv3_out_shape[0] * conv3_out_shape[1] * 64
-
-    # input_layer = pygad.cnn.Input2D(input_shape=(1, 84, 84))
-    # conv1_layer = pygad.cnn.Conv2D(num_filters=32,
-    #                             kernel_size=8,
-    #                             previous_layer=input_layer,
-    #                             activation_function="relu")
-    # conv2_layer = pygad.cnn.Conv2D(num_filters=64,
-    #                             kernel_size=4,
-    #                             previous_layer=conv1_layer,
-    #                             activation_function="relu")
-    # conv3_layer = pygad.cnn.Conv2D(num_filters=64,
-    #                             kernel_size=3,
-    #                             previous_layer=conv2_layer,
-    #                             activation_function="relu")
-    # flatten_layer = pygad.cnn.Flatten(previous_layer=conv3_layer)
-    # dense1_layer = pygad.cnn.Dense(num_neurons=448,
-    #                             previous_layer=flatten_layer,
-    #                             activation_function="relu")
-    # dense2_layer = pygad.cnn.Dense(num_neurons=448,
-    #                             previous_layer=dense1_layer,
-    #                             activation_function="relu")
-    # dense3_layer = pygad.cnn.Dense(num_neurons=n_actions,
-    #                             previous_layer=dense2_layer,
-    #                             activation_function="softmax")
-
-    # policy_model = pygad.cnn.policy_model(last_layer=dense3_layer,
-    #                     epochs=1,
-    #                     learning_rate=0.01)
-
-    # GACNN_instance = pygad.gacnn.GACNN(policy_model=policy_model,
-    #                                num_solutions=4)
-    # population_vectors = pygad.gacnn.population_as_vectors(population_networks=GACNN_instance.population_networks)
-    # print(population_vectors)
-
-    torch_ga = pygad.torchga.TorchGA(model=policy_model, num_solutions=10)
+    torch_ga = pygad.torchga.TorchGA(model=policy_model, num_solutions=8)
 
     # Prepare the PyGAD parameters. Check the documentation for more information: https://pygad.readthedocs.io/en/latest/README_pygad_ReadTheDocs.html#pygad-ga-class
     num_generations = 50  # Number of generations.
