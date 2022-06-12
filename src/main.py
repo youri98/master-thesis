@@ -173,7 +173,7 @@ def fitness_func(solution, sol_idx):
         t += 1
         total_obs.append(next_obs)
 
-    # r_i = agent.calculate_int_rewards(all_states)
+    r_i = agent.calculate_int_rewards(total_obs)
     # r_i = agent.normalize_int_rewards(r_i)
     episode_int_reward = [0]
 

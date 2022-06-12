@@ -192,7 +192,7 @@ class APE:
         return np.mean(rnd_losses)
     
 
-    def calculate_int_rewards(self, next_states, batch=True, iteration=None):
+    def calculate_int_rewards(self, next_states, batch=True):
         if not batch:
             next_states = np.expand_dims(next_states, 0)
         next_states = np.clip((next_states - self.state_rms.mean) / (self.state_rms.var ** 0.5), -5, 5,
@@ -200,17 +200,10 @@ class APE:
         # torch.cuda.empty_cache() 
         next_states = torch.from_numpy(next_states).type(torch.float32).to(self.device)
 
-        actions = torch.from_numpy(actions).to(torch.int64).to(self.device)
-        actions = torch.nn.functional.one_hot(actions, num_classes=self.n_actions)
-        actions = actions.view(-1, self.timesteps, self.n_actions)
-
-        target_encoded_features = self.target_model(next_states).detach()
-
-        target_encoded_features = target_encoded_features.view(-1, self.timesteps, self.encoding_size)
+        target_encoded_features = self.target_model(next_states)
         predictor_encoded_features = self.predictor_model(next_states).detach()
-        predictor_encoded_features = predictor_encoded_features.view(-1, self.timesteps, self.encoding_size)
 
-        loss = torch.mean(torch.pow(target_encoded_features - predictor_encoded_features, 2), 1)
+        loss = torch.pow(target_encoded_features - predictor_encoded_features, 2)
             
         if not batch:
             return loss
@@ -222,7 +215,10 @@ class APE:
         target_encoded_features = self.target_model(next_states) # wants flat
         predictor_encoded_features = self.predictor_model(next_states)
         loss = torch.pow(predictor_encoded_features - target_encoded_features, 2)
-        mask = np.random.choice([1,0], size=len(target_encoded_features), p=[self.config["predictor_proportion"], 1 - self.config["predictor_proportion"]])
+
+        mask = torch.rand(loss.size(), device=self.device)
+        mask = mask < self.config["predictor_proportion"]
+        # mask = np.random.choice([1,0], size=len(target_encoded_features), p=[self.config["predictor_proportion"], 1 - self.config["predictor_proportion"]])
 
         loss = torch.mean(loss[mask])
 
