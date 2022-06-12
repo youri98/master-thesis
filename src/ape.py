@@ -1,6 +1,6 @@
 from scipy.misc import derivative
 import wandb
-from ape_models import PolicyModel, PredictorModel, TargetModel, DiscriminatorModel, DiscriminatorModelGRU, PredictorModelRND
+from ape_models import PolicyModel, PredictorModel, TargetModel, PredictorModelRND
 import torch
 import numpy as np
 from torch.optim.adam import Adam
@@ -72,21 +72,38 @@ class APE:
         for param in self.target_model.parameters():
             param.requires_grad = False
 
+    def get_discount_rewards():
+        # dont know if this is a good idea, because future states we want to count as important?
+        pass
+
     def get_gae(self, rewards, values, next_values, dones, gamma):
         lam = self.config["lambda"]  # Make code faster.
-        returns = [[] for _ in range(self.config["n_workers"])] 
-        extended_values = np.zeros((self.config["n_workers"], self.config["rollout_length"] + 1))
-        for worker in range(self.config["n_workers"]):
-            extended_values[worker] = np.append(values[worker], next_values[worker])
-            gae = 0
-            for step in reversed(range(len(rewards[worker]))):
-                delta = rewards[worker][step] + gamma * (extended_values[worker][step + 1]) * (1 - dones[worker][step]) \
-                        - extended_values[worker][step]
-                gae = delta + gamma * lam * (1 - dones[worker][step]) * gae
-                returns[worker].insert(0, gae + extended_values[worker][step])
 
-        return np.concatenate(returns)
+        returns = []
+        extended_values = [np.array([]) for _ in range(self.config["n_workers"])]  #np.zeros((self.config["n_workers"], self.config["rollout_length"] + 1))
 
+        extended_values = np.append(values, next_values)
+        gae = 0
+        for step in reversed(range(len(rewards))):
+            delta = rewards[step] + gamma * (extended_values[step + 1]) * (1 - dones[step]) \
+                    - extended_values[step]
+            gae = delta + gamma * lam * (1 - dones[step]) * gae
+            returns.insert(0, gae + extended_values[step])
+
+        return np.array(returns)
+
+    def get_adv(self, int_rewards, ext_rewards, int_values, ext_values, next_int_values, next_ext_values, dones):
+        int_rets = self.get_gae(int_rewards, int_values, next_int_values, np.zeros_like(dones), self.config["int_gamma"])
+        ext_rets = self.get_gae(ext_rewards, ext_values, next_ext_values, dones, self.config["ext_gamma"])
+
+        ext_values = np.array(ext_values)
+        ext_advs = ext_rets - ext_values
+
+        int_values = np.array(int_values)
+        int_advs = int_rets - int_values
+
+        advs = ext_advs * self.config["ext_adv_coeff"] + int_advs * self.config["int_adv_coeff"]
+        return advs
 
     def optimize(self, loss, optimizer, model):
         model.zero_grad()
