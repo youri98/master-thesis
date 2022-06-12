@@ -97,7 +97,7 @@ class PooledGA(pygad.GA):
         output = pool.map(fitness_wrapper, self.population)
         logger.time_stop("Env Time")
 
-        ext_reward, episode_logs, observations =  zip(*output)
+        ext_reward, episode_logs, observations, int_values, ext_values, next_int_values, next_ext_values =  zip(*output)
         ext_reward = list(ext_reward)
         indices = [len(obs) for obs in observations]
         indices.insert(0, 0)
@@ -187,7 +187,8 @@ def fitness_func(solution, sol_idx):
 
     # initialize env
     episode_ext_reward, total_obs, done, t = [], [], False, 1
-
+    total_int_values, total_ext_values, total_next_int_values, total_next_ext_values = [], [], [], []
+    
     state_shape = config["state_shape"]
     env = envs[current_pool_id] 
     state = env.reset() # firtst observation
@@ -200,14 +201,15 @@ def fitness_func(solution, sol_idx):
         state = torch.from_numpy(_stacked_states).to(device)
         
         with torch.no_grad():
-            output = policy_model(torch.unsqueeze(state.type(torch.float), 0))
-            int_value, ext_value, action_prob = output
+            int_value, ext_value, action_prob = policy_model(torch.unsqueeze(state.type(torch.float), 0))
             dist = Categorical(action_prob)
             action = dist.sample()
             log_prob = dist.log_prob(action)
 
         # action, int_value, ext_value, log_prob, action_prob = agent.get_actions_and_values(_stacked_states, batch=True)
         next_state, r, done, info = env.step(action)
+
+        next_int_value, next_ext_value, _= policy_model(torch.unsqueeze(next_state.type(torch.float), 0))
 
         if t % max_episode_steps == 0:
             done = True
@@ -222,10 +224,14 @@ def fitness_func(solution, sol_idx):
 
             episode_logs = {"Ep Visited Rooms": list(visited_rooms), "Episode Ext Reward": sum(episode_ext_reward)}
 
-        
-        episode_ext_reward.append(r)
         t += 1
+
+        episode_ext_reward.append(r)
         total_obs.append(next_obs)
+        total_int_values.append(int_value)
+        total_ext_values.append(ext_value)
+        total_next_int_values.append(next_int_value)
+        total_next_ext_values.append(next_ext_value)
 
 
     total_obs = np.array(total_obs)
@@ -238,7 +244,7 @@ def fitness_func(solution, sol_idx):
     if "episode_logs" in locals():
         return sum(episode_ext_reward), episode_logs, total_obs
     else:
-        return sum(episode_ext_reward), None, total_obs
+        return sum(episode_ext_reward), None, total_obs, total_int_values, total_ext_values, total_next_int_values, total_next_ext_values
 
 #######
 
