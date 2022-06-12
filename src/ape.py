@@ -165,22 +165,22 @@ class APE:
             yield states[idx], actions[idx], int_returns[idx], ext_returns[idx], advs[idx], \
                   log_probs[idx], next_states[idx]
 
-    # def choose_mini_batch_rnd(self, next_states):
-    #     next_states = torch.Tensor(next_states).to(self.device)
-    #     indices = np.random.randint(0, len(next_states), (self.config["n_mini_batch"], self.mini_batch_size))
+    def choose_mini_batch_rnd(self, next_states):
+        next_states = torch.Tensor(next_states).to(self.device)
+        batch_size = int(np.ceil(len(next_states)/self.config["n_mini_batch"]))
+        indices = np.random.randint(0, len(next_states), (self.config["n_mini_batch"], batch_size))
 
-    #     for idx in indices:
-    #         yield next_states[idx]
+        for idx in indices:
+            yield next_states[idx]
 
     def train_rnd(self, total_next_obs):
-        total_next_obs = np.expand_dims(total_next_obs, 1)
         self.state_rms.update(total_next_obs)
         total_next_obs = ((total_next_obs - self.state_rms.mean) / (self.state_rms.var ** 0.5)).clip(-5, 5)
         total_next_obs = torch.Tensor(total_next_obs).to(self.device)
 
         rnd_losses = []
         for epoch in range(self.config["n_epochs"]):
-            for next_state in torch.split(total_next_obs, int(np.ceil(len(total_next_obs)/self.config["n_mini_batch"]))):
+            for next_state in self.choose_mini_batch_rnd(total_next_obs):
  
                 rnd_loss = self.calculate_rnd_loss(next_state)
 
@@ -204,11 +204,12 @@ class APE:
         predictor_encoded_features = self.predictor_model(next_states).detach()
 
         loss = torch.pow(target_encoded_features - predictor_encoded_features, 2)
+        loss = torch.mean(loss, 1)
             
         if not batch:
             return loss
         else:
-            return loss.detach().cpu().numpy().reshape((self.config["n_workers"], self.config["rollout_length"]))
+            return loss.detach().cpu().numpy()
                 
 
     def calculate_rnd_loss(self, next_states): 
@@ -247,22 +248,26 @@ class APE:
         return loss
 
 
-    def normalize_int_rewards(self, intrinsic_rewards):
+    def normalize_int_rewards(self, pop_intrinsic_rewards):
         # OpenAI's usage of Forward filter is definitely wrong;
         # Because: https://github.com/openai/random-network-distillation/issues/16#issuecomment-488387659
-        if isinstance(intrinsic_rewards, torch.Tensor):
-            intrinsic_rewards = intrinsic_rewards.to(torch.float32).cpu().numpy()
+        # if isinstance(intrinsic_rewards, torch.Tensor):
+        #     intrinsic_rewards = intrinsic_rewards.to(torch.float32).cpu().numpy()
 
         gamma = self.config["int_gamma"]  # Make code faster.
         intrinsic_returns = [[] for _ in range(self.config["n_workers"])]
-        for worker in range(self.config["n_workers"]):
+        for indiv_idx, individual in enumerate(pop_intrinsic_rewards):
             rewems = 0
-            for step in reversed(range(self.config["rollout_length"])):
-                rewems = rewems * gamma + intrinsic_rewards[worker][step]
-                intrinsic_returns[worker].insert(0, rewems)
-        self.int_reward_rms.update(np.ravel(intrinsic_returns).reshape(-1, 1))
+            for step in reversed(range(len(individual))):
+                rewems = rewems * gamma + individual[step]
+                intrinsic_returns[indiv_idx].insert(0, rewems)
+        temp = np.array(intrinsic_returns, dtype=object)
+        temp = np.concatenate(temp)
+        temp = np.ravel(temp)
+        temp = temp.reshape(-1, 1)
+        self.int_reward_rms.update(temp)
 
-        return intrinsic_rewards / (self.int_reward_rms.var ** 0.5)
+        return np.array(pop_intrinsic_rewards, dtype=object) / (self.int_reward_rms.var ** 0.5)
 
     def set_to_eval_mode(self):
         self.current_policy.eval()

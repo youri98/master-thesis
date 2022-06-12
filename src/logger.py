@@ -34,7 +34,7 @@ class Logger:
         self.timer = {}
 
         self.run_id = wandb.util.generate_id()
-        wandb.init(project="RND", entity="youri",
+        wandb.init(project="Genetic", entity="youri",
                    id=self.run_id, resume="allow")
         wandb.config = self.config
 
@@ -69,11 +69,13 @@ class Logger:
         self.timer[kind] = self.timer[kind] + (time.time(
         ) - self.start_time) if kind in self.timer else (time.time() - self.start_time)
 
-    def log_recording(self, iteration, recording, fps=60):
+    def log_recording(self, recording, generation=None, fps=60, name="Best"):
         if recording is not None:
-            recording = np.expand_dims(recording, 1)
-            wandb.log({"video": wandb.Video(
-                np.array(recording), fps=fps, format='gif')}, step=iteration)
+            # recording = np.expand_dims(recording, 1)
+            # recording = np.tile(recording, (1, 3, 1, 1))
+
+            wandb.log({name: wandb.Video(
+                np.array(recording), fps=fps, format='gif')}, step=generation)
         # self.scores["Recording"].append(recording.tolist())
 
     def save_recording_local(self, iteration, recording, fps=60):
@@ -123,11 +125,8 @@ class Logger:
             file.write(json.dumps(norm_scores))
 
     def log_iteration(self, *args):
-        if self.config["algo"] == 'APE':
-            iteration, n_frames, (pg_losses, ext_value_losses, int_value_losses, rnd_losses,
-                        disc_losses, entropies, advs, disc_l1_losses, gen_l1_losses), int_reward, ext_reward, action_prob, recording_int_rewards = args
-        else:
-            iteration, n_frames, (pg_losses, ext_value_losses, int_value_losses, rnd_losses, entropies, advs), int_reward, ext_reward, action_prob, recording_int_rewards = args
+        iteration, n_frames, int_reward, ext_reward, fitness, rnd_loss = args
+
         # self.running_act_prob = self.exp_avg(self.running_act_prob, action_prob)
         # self.running_int_reward = self.exp_avg(self.running_int_reward, int_reward)
         # self.running_training_logs = self.exp_avg(self.running_training_logs, np.array(training_logs))
@@ -135,33 +134,19 @@ class Logger:
         params = {
             "Visited Rooms": len(list(self.visited_rooms)),
             "N Frames": n_frames,
-            "Action Probability": action_prob,
             "Intrinsic Reward": int_reward.item(),
-            "Entrinsic Reward": ext_reward.item(),
-            "PG Loss": pg_losses,
-            "Ext Value Loss": ext_value_losses,
-            "Int Value Loss": int_value_losses,
-            "Entropy": entropies,
-            "Recording Int Reward" : recording_int_rewards,
-            "Advantage": advs.item(),
-            # "Intrinsic Explained variance": self.running_training_logs[5],
-            # "Extrinsic Explained variance": self.running_training_logs[6],
+            "Extrinsic Reward": ext_reward.item(),
+            "Fitness": fitness,
+            "RND Loss": rnd_loss,
         }
 
-        if self.config['algo'] == 'APE':
-            params["Discriminator Loss"] = disc_losses
-            params["Generator L1 Loss"] = gen_l1_losses
-            params["Discriminator L1 Loss"] = disc_l1_losses
-            params["Gen Loss"] = rnd_losses
-        else:
-            params["RND Loss"] = rnd_losses
 
 
-        self.scores['Iteration'].append(iteration)
-        for k, v in params.items():
-            # if isinstance(v, torch.Tensor):
-            #     v = v.item()
-            self.scores[k].append(v)
+        # self.scores['Iteration'].append(iteration)
+        # for k, v in params.items():
+        #     # if isinstance(v, torch.Tensor):
+        #     #     v = v.item()
+        #     self.scores[k].append(v)
 
         params.update(self.timer)
         wandb.log(params, step=iteration)

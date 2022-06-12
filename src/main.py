@@ -85,36 +85,92 @@ class PooledGA(pygad.GA):
     def cal_pop_fitness(self):
         if not hasattr(self, "frames"):
             self.frames = 0
-        # if not hasattr(self, "iteration"):
-        #     self.iteration = 0
+        if not hasattr(self, "iteration"):
+            self.iteration = 0
+        else:
+            self.iteration += 1
         
-        global pool, agent
+        global pool, agent, config, logger
 
+        # play in env
+        logger.time_start()
         output = pool.map(fitness_wrapper, self.population)
-        pop_fitness, episode_logs, states =  zip(*output)
+        logger.time_stop("Env Time")
 
-        states = np.concatenate(states)
+        ext_reward, episode_logs, observations =  zip(*output)
+        ext_reward = list(ext_reward)
+        indices = [len(obs) for obs in observations]
+        indices.insert(0, 0)
+        indices = np.cumsum(indices)
 
+        intervals = list(pairwise(indices))
+
+        logger.time_start()
+        total_obs = np.concatenate(observations)
+        total_int_reward = agent.calculate_int_rewards(total_obs)
+        total_int_reward = tuple(total_int_reward[interval[0]:interval[1]] for interval in intervals) # reshape to seperate individuals
+        total_int_reward = agent.normalize_int_rewards(total_int_reward)
+        int_reward = tuple(np.sum(indiv_int_reward) for indiv_int_reward in total_int_reward)
+        logger.time_stop("Calc Int Reward Time")
+
+        self.frames += indices[-1] * 4 # 4 stacked frames
+        pop_fitness = tuple(map(lambda r_e, r_i: config["ext_adv_coeff"]*r_e + config["int_adv_coeff"]*r_i, ext_reward, int_reward))
+
+        pop_fitness = np.array(pop_fitness)
+
+        # do something with this
         episode_logs = list(filter(None, episode_logs))
 
-        self.frames += states.shape[0] * states.shape[1]
-
-
         # train rnd
-        rnd_loss = agent.train_rnd(states)
+        logger.time_start()
+        rnd_loss = agent.train_rnd(total_obs)
+        logger.time_stop("RND Train Time")
 
-        # wandb.log(episode_logs[0])
-        wandb.log({"N Frames": self.frames})
-        wandb.log({"RND Loss": rnd_loss})
 
-        print(episode_logs, self.frames, rnd_loss)
-        pop_fitness = np.array(pop_fitness)
+
+        if self.iteration != 0: # ignore initial call
+        
+            logger.log_iteration(self.iteration, self.frames, np.mean(int_reward), np.mean(ext_reward), np.mean(pop_fitness), rnd_loss)
+            best_idx = np.argmax(pop_fitness)
+            best_recording = total_obs[intervals[best_idx][0]:intervals[best_idx][1]]
+            logger.log_recording(best_recording, generation=self.iteration)
+
+            min_len = min([interval[1] - interval[0] for interval in intervals])
+            total_recording = np.max([obs[:min_len] for obs in observations], 0)
+            total_recording = np.tile(total_recording, (1, 3, 1, 1))
+            red_recording = np.pad(best_recording, ((0,0), (1,1), (0,0), (0,0)), 'constant', constant_values=0)
+            total_recording = np.mean((red_recording[:min_len], total_recording), 0).astype(np.uint8)
+
+            
+            logger.log_recording(total_recording, generation=self.iteration, name="All")
+
+        print(f"pop fitness: {pop_fitness}, frames {self.frames}, rnd_loss: {rnd_loss}")
         return pop_fitness
 
 def callback_generation(ga_instance):
-
+    logger.time_stop("Mutation Time")
     print("Generation = {generation}".format(generation=ga_instance.generations_completed))
     print("Fitness    = {fitness}".format(fitness=ga_instance.best_solution()[1]))
+
+def on_fitness(ga_instance, population_fitness):
+    print("on_fitness()")
+
+def on_parents(ga_instance, selected_parents):
+    logger.time_start()
+
+def on_crossover(ga_instance, offspring_crossover):
+    print("on_crossover()")
+
+def on_mutation(ga_instance, offspring_mutation):
+    logger.time_stop("Crossover Time")
+    logger.time_start()
+
+def on_generation(ga_instance):
+    print("on_generation()")
+
+
+
+
 
 def fitness_wrapper(solution):
     return fitness_func(solution, 0)
@@ -124,15 +180,13 @@ def run_workers_env_step(worker, conn):
 
 def fitness_func(solution, sol_idx):
     global policy_model, envs, device, config, agent
-    # print(len(solution), sol_idx)
 
     current_pool_id = multiprocessing.current_process()._identity[0] - 2 # dont get why its 2 tm 9
-    print ('running: ', current_pool_id)
     policy_model_weights_dict = pygad.torchga.model_weights_as_dict(model=policy_model, weights_vector=solution)
     policy_model.load_state_dict(policy_model_weights_dict)
 
     # initialize env
-    episode_ext_reward, episode_int_reward, total_obs, sum_reward, done, t = [], [], [], 0, False, 1
+    episode_ext_reward, total_obs, done, t = [], [], False, 1
 
     state_shape = config["state_shape"]
     env = envs[current_pool_id] 
@@ -173,16 +227,18 @@ def fitness_func(solution, sol_idx):
         t += 1
         total_obs.append(next_obs)
 
-    r_i = agent.calculate_int_rewards(total_obs)
-    # r_i = agent.normalize_int_rewards(r_i)
+
+    total_obs = np.array(total_obs)
+    total_obs = np.expand_dims(total_obs, 1)
+
     episode_int_reward = [0]
 
-    sum_reward = config["ext_adv_coeff"]*sum(episode_int_reward) + config["int_adv_coeff"]*sum(episode_ext_reward)
+    sum_reward = 0 #config["ext_adv_coeff"]*sum(episode_int_reward) + config["int_adv_coeff"]*sum(episode_ext_reward)
 
     if "episode_logs" in locals():
-        return sum_reward, episode_logs, total_obs
+        return sum(episode_ext_reward), episode_logs, total_obs
     else:
-        return sum_reward, None, total_obs
+        return sum(episode_ext_reward), None, total_obs
 
 #######
 
@@ -233,9 +289,9 @@ else:
 
     # Prepare the PyGAD parameters. Check the documentation for more information: https://pygad.readthedocs.io/en/latest/README_pygad_ReadTheDocs.html#pygad-ga-class
     num_generations = 50  # Number of generations.
-    num_parents_mating = 5  # Number of solutions to be selected as parents in the mating pool.
+    num_parents_mating = 4  # Number of solutions to be selected as parents in the mating pool.
     initial_population = torch_ga.population_weights  # Initial population of network weights
-    parent_selection_type = "sss"  # Type of parent selection.
+    parent_selection_type = "rws"  # Type of parent selection.
     crossover_type = "single_point"  # Type of the crossover operator.
     mutation_type = "random"  # Type of the mutation operator.
     mutation_percent_genes = 10  # Percentage of genes to mutate. This parameter has no action if the parameter mutation_num_genes exists.
@@ -251,7 +307,11 @@ else:
                         mutation_percent_genes=mutation_percent_genes,
                         keep_parents=keep_parents,
                         on_generation=callback_generation,
-                        initial_population=initial_population)
+                        on_parents=on_parents,
+                        initial_population=initial_population,
+                        on_mutation=on_mutation,
+                        on_fitness=on_fitness,
+                        on_crossover=on_crossover)
                         # sol_per_pop=10,
                         # num_genes=300)
 
@@ -262,43 +322,6 @@ else:
 
 
 
-
-
-    total_int_rewards = agent.calculate_int_rewards(total_next_obs)
-
-
-    total_int_rewards = agent.normalize_int_rewards(total_int_rewards)
-    
-
-
-    training_logs = agent.train(states=concatenate(total_states),
-                    actions=total_actions,
-                    int_rewards=total_int_rewards,
-                    ext_rewards=total_ext_rewards,
-                    dones=total_dones,
-                    int_values=total_int_values,
-                    ext_values=total_ext_values,
-                    log_probs=concatenate(total_log_probs),
-                    next_int_values=next_int_values,
-                    next_ext_values=next_ext_values,
-                    total_next_obs=total_next_obs)
-
-    n_frames = total_states.shape[0] * total_states.shape[1] * total_states.shape[2] * (iteration + 1)
-    logger.log_iteration(iteration,
-                            n_frames,
-                            training_logs,
-                            total_int_rewards[0].mean(),
-                            total_ext_rewards[0].mean(),
-                            total_action_probs[0].max(-1).mean(),
-                            recording_int_rewards.mean(),
-                            )
-    
-
-
-    # if iteration % config["interval"] == 0 or iteration == config["total_rollouts"]:
-    #     logger.save_params(episode, iteration)
-    #     logger.save_score_to_json()
-    #     logger.time_stop()
 
 
 

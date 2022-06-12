@@ -5,6 +5,7 @@ import gym
 from copy import deepcopy
 import shutil
 import torch
+from itertools import tee
 
 def conv_shape(input_dims, kernel_size, stride, padding=0):
     return ((input_dims[0] + 2 * padding - kernel_size) // stride + 1,
@@ -196,6 +197,11 @@ def update_mean_var_count_from_moments(mean, var, count, batch_mean, batch_var, 
 
     return new_mean, new_var, new_count
 
+def pairwise(iterable):
+    # pairwise('ABCDEFG') --> AB BC CD DE EF FG
+    a, b = tee(iterable)
+    next(b, None)
+    return zip(a, b)
 
 class RewardForwardFilter(object):
     def __init__(self, gamma):
