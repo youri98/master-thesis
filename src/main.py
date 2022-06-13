@@ -83,6 +83,8 @@ if config["mode"] == "test" or config["mode"] == "train_from_chkpt":
 class PooledGA(pygad.GA):
 
     def cal_pop_fitness(self):
+
+        print("calculating population fitness...")
         if not hasattr(self, "frames"):
             self.frames = 0
         if not hasattr(self, "iteration"):
@@ -115,11 +117,11 @@ class PooledGA(pygad.GA):
         self.frames += indices[-1] * config["state_shape"][0] # 4 stacked frames
 
         # would gae work as critic will be made worse by agent, so make critic los van de rest en train dit apart
-        # TODO: multiprocess this
         # advs = [agent.get_adv(total_int_reward[idx], total_ext_rewards[idx], int_values[idx], ext_values[idx], next_int_values[idx], next_ext_values[idx], dones[idx]) for idx in range(config["n_workers"])]
         # pop_fitness = np.array([np.sum(adv) for adv in advs])
         ext_rewards = np.array([np.sum(indiv_int_reward) for indiv_int_reward in total_ext_rewards])
-        pop_fitness = tuple(map(lambda r_e, r_i: config["ext_adv_coeff"]*r_e + config["int_adv_coeff"]*r_i, ext_rewards, int_reward))
+        pop_fitness = list(map(lambda r_e, r_i: config["ext_adv_coeff"]*r_e + config["int_adv_coeff"]*r_i, ext_rewards, int_reward))
+        pop_fitness = np.array(pop_fitness)
 
         # do something with this
         episode_logs = list(filter(None, episode_logs))
@@ -133,16 +135,16 @@ class PooledGA(pygad.GA):
 
         if self.iteration != 0: # ignore initial call
         
-            logger.log_iteration(self.iteration, self.frames, np.mean(int_reward), np.mean(np.concatenate(ext_rewards)), np.mean(pop_fitness), rnd_loss)
+            logger.log_iteration(self.iteration, self.frames, np.mean(int_reward), np.mean(ext_rewards), np.mean(pop_fitness), rnd_loss)
             best_idx = np.argmax(pop_fitness)
             best_recording = total_obs[intervals[best_idx][0]:intervals[best_idx][1]]
             logger.log_recording(best_recording, generation=self.iteration)
 
             min_len = min([interval[1] - interval[0] for interval in intervals])
             total_recording = np.max([obs[:min_len] for obs in observations], 0)
-            total_recording = np.tile(total_recording, (1, 3, 1, 1))
-            red_recording = np.pad(best_recording, ((0,0), (1,1), (0,0), (0,0)), 'constant', constant_values=0)
-            total_recording = np.mean((red_recording[:min_len], total_recording), 0).astype(np.uint8)
+            total_recording = np.pad(total_recording, ((0,0), (0,2), (0,0), (0,0)), 'constant', constant_values=0) // 2
+            red_recording = np.tile(best_recording, (1, 3, 1, 1))
+            total_recording = np.max((red_recording[:min_len], total_recording), 0).astype(np.uint8)
 
             
             logger.log_recording(total_recording, generation=self.iteration, name="All")
@@ -151,25 +153,30 @@ class PooledGA(pygad.GA):
         return pop_fitness
 
 def callback_generation(ga_instance):
-    logger.time_stop("Mutation Time")
+    print("on_generation()")
+
     print("Generation = {generation}".format(generation=ga_instance.generations_completed))
-    print("Fitness    = {fitness}".format(fitness=ga_instance.best_solution()[1]))
+    print("Fitness    = {fitness}".format(fitness=ga_instance.best_solutions_fitness))
+    ga_instance.best_solutions_fitness = []
 
 def on_fitness(ga_instance, population_fitness):
     print("on_fitness()")
 
 def on_parents(ga_instance, selected_parents):
+    print("on_parents()")
     logger.time_start()
 
 def on_crossover(ga_instance, offspring_crossover):
     print("on_crossover()")
-
-def on_mutation(ga_instance, offspring_mutation):
     logger.time_stop("Crossover Time")
     logger.time_start()
 
-def on_generation(ga_instance):
-    print("on_generation()")
+
+def on_mutation(ga_instance, offspring_mutation):
+    print("on_mutation()")
+    logger.time_stop("Mutation Time")
+
+
 
 
 
@@ -200,7 +207,7 @@ def fitness_func(solution, sol_idx):
     _stacked_states = stack_states(_stacked_states, state, True)
     
     # rollout length / until dead
-    while t <= config["max_frames_per_episode"] and not done and t <= 250:
+    while t <= config["max_frames_per_episode"] and not done and t <= 700:
         state = torch.from_numpy(_stacked_states).to(device)
         
         with torch.no_grad():
@@ -221,7 +228,8 @@ def fitness_func(solution, sol_idx):
 
         next_state = torch.from_numpy(_stacked_states).to(device)
 
-        next_int_value, next_ext_value, _= policy_model(torch.unsqueeze(next_state.type(torch.float), 0))
+        with torch.no_grad():
+            next_int_value, next_ext_value, _= policy_model(torch.unsqueeze(next_state.type(torch.float), 0))
 
         if "episode" in info and current_pool_id == 0 and done:
             visited_rooms = info["episode"]["visited_room"]
@@ -288,13 +296,13 @@ else:
     env_name = config["env"]
     max_episode_steps = config["max_frames_per_episode"]
     state_shape = config["state_shape"]
-    envs = [make_atari(env_name, max_episode_steps) for i in range(config["n_workers"])] # change this outside call    
+    envs = [make_atari(env_name, max_episode_steps) for i in range(config["n_individuals_per_gen"])] # change this outside call    
     episode_logs = {}
     policy_model = agent.current_policy
     rnd = agent.predictor_model
   
 
-    torch_ga = pygad.torchga.TorchGA(model=policy_model, num_solutions=8)
+    torch_ga = pygad.torchga.TorchGA(model=policy_model, num_solutions=config["n_individuals_per_gen"])
 
     # Prepare the PyGAD parameters. Check the documentation for more information: https://pygad.readthedocs.io/en/latest/README_pygad_ReadTheDocs.html#pygad-ga-class
     num_generations = 50  # Number of generations.
@@ -307,20 +315,21 @@ else:
     keep_parents = -1  # Number of parents to keep in the next population. -1 means keep all parents and 0 means keep nothing.
 
 
-    ga_instance = PooledGA(num_generations=num_generations,
-                        num_parents_mating=num_parents_mating,
+    ga_instance = PooledGA(num_generations=config["num_generations"],
+                        num_parents_mating=config["num_parents_mating"],
+                        parent_selection_type=config["parent_selection_type"],
+                        crossover_type=config["crossover_type"],
+                        mutation_type=config["mutation_type"],
+                        mutation_percent_genes=config["mutation_percent_genes"],
+                        keep_parents=config["keep_parents"],
+                        initial_population=initial_population,
                         fitness_func=fitness_func,
-                        parent_selection_type=parent_selection_type,
-                        crossover_type=crossover_type,
-                        mutation_type=mutation_type,
-                        mutation_percent_genes=mutation_percent_genes,
-                        keep_parents=keep_parents,
                         on_generation=callback_generation,
                         on_parents=on_parents,
-                        initial_population=initial_population,
                         on_mutation=on_mutation,
                         on_fitness=on_fitness,
-                        on_crossover=on_crossover)
+                        on_crossover=on_crossover,
+                        save_best_solutions=False) # might use this for GAETL
                         # sol_per_pop=10,
                         # num_genes=300)
 

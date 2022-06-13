@@ -1,6 +1,6 @@
 from scipy.misc import derivative
 import wandb
-from ape_models import PolicyModel, PredictorModel, TargetModel, PredictorModelRND
+from ape_models import PolicyModel, TargetModel, PredictorModelRND
 import torch
 import numpy as np
 from torch.optim.adam import Adam
@@ -40,7 +40,7 @@ class APE:
         self.predictor_model = PredictorModelRND(self.obs_shape).to(self.device)
         self.target_model = TargetModel(self.obs_shape, self.encoding_size).to(self.device)
 
-        self.current_policy.requires_grad_(False)
+        # self.current_policy.requires_grad_(False)
     
 
 

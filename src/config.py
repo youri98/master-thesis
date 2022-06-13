@@ -1,5 +1,5 @@
 import argparse
-
+import multiprocessing
 
 def get_params():
     parser = argparse.ArgumentParser(
@@ -17,6 +17,8 @@ def get_params():
     parser.add_argument("--verbose", default=False, action="store_true")
     parser.add_argument("--model_name", help="name of model to resume training or to test")
     parser.add_argument("--multiple_gpus", default=False, action="store_true", help="whether the run is on multiple gpus")
+    parser.add_argument("--n_individuals_per_gen", default=multiprocessing.cpu_count(),  help="number of individuals to simulate per generation")
+
 
     # parser.add_argument("--do_test", action="store_true",
     #                     help="The flag determines whether to train the agent or play with it.")
@@ -34,22 +36,34 @@ def get_params():
     # MontezumaRevengeNoFrameskip-v4
     # region default parameters
     default_params = {
-                      "state_shape": (4, 84, 84),
-                      "obs_shape": (1, 84, 84),
-                      "max_frames_per_episode": 4500,  # 4500 * 4 = 18K :D
-                      "rollout_length": 128,
-                      "n_epochs": 4,
-                      "n_mini_batch": 4,
-                      "lr": 1e-4,
-                      "ext_gamma": 0.999,
-                      "int_gamma": 0.99,
-                      "lambda": 0.95,
-                      "ext_adv_coeff": 2,
-                      "int_adv_coeff": 1,
-                      "ent_coeff": 0.001,
-                      "clip_range": 0.1,
-                      "pre_normalization_steps": 5,
-                      }
+        "state_shape": (4, 84, 84),
+        "obs_shape": (1, 84, 84),
+        "max_frames_per_episode": 4500,  # 4500 * 4 = 18K :D
+        "rollout_length": 128,
+        "n_epochs": 4,
+        "n_mini_batch": 4,
+        "lr": 1e-4,
+        "ext_gamma": 0.999,
+        "int_gamma": 0.99,
+        "lambda": 0.95,
+        "ext_adv_coeff": 2,
+        "int_adv_coeff": 1,
+        "ent_coeff": 0.001,
+        "clip_range": 0.1,
+        "pre_normalization_steps": 5,
+        "num_generations": 50,  # Number of generations.
+        # Number of solutions to be selected as parents in the mating pool.
+        "num_parents_mating": 5,
+        "parent_selection_type": "sss",  # Type of parent selection.
+        # Type of the crossover operator.
+        "crossover_type": "single_point",
+        # Type of the mutation operator.
+        "mutation_type": "random",
+        # Percentage of genes to mutate. This parameter has no action if the parameter mutation_num_genes exists.
+        "mutation_percent_genes": 20,
+        # Number of parents to keep in the next population. -1 means keep all parents and 0 means keep nothing.
+        "keep_parents": 2,
+    }
 
     # endregion
     total_params = {**vars(parser_params), **default_params}
