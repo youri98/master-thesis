@@ -46,10 +46,8 @@ class PooledGA(pygad.GA):
         parents = []
 
         for i, worker in enumerate(workers):
-            parent_conn, child_conn = Pipe()
-            p = Process(target=GAfunctions.fitness_wrapper, args=(self.population[i], worker, child_conn,))
+            p = Process(target=GAfunctions.fitness_wrapper, args=(self.population[i], worker,))
             p.daemon = True
-            parents.append(parent_conn)
             p.start()
 
         print("workers build")
