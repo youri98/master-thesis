@@ -49,6 +49,7 @@ class PooledGA(pygad.GA):
             p = Process(target=GAfunctions.fitness_wrapper, args=(self.population[i], worker,))
             p.daemon = True
             p.start()
+        
 
         print("workers build")
 
@@ -143,11 +144,9 @@ class GAfunctions():
         globals.logger.time_stop("Mutation Time")
 
     @staticmethod   
-    def fitness_wrapper(solution, worker, conn):
-        worker, conn
-        worker.step(conn)
-
-        process_results[i] = GAfunctions.fitness_func(solution, 0)
+    def fitness_wrapper(solution, worker):
+        return 1
+        # return GAfunctions.fitness_func(solution, 0)
         
 
     @staticmethod
