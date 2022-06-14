@@ -9,4 +9,4 @@
 
 module load cuda10.2/toolkit/10.2.89
 
-python run_on_hpc.py
+python main.py

@@ -28,9 +28,16 @@ from torch.distributions.categorical import Categorical
 from collections import deque
 from GA import GAfunctions, PooledGA
 import globals
+import sys, os
+from main import main
+import wandb
+import time
 
-def main():
-    
+sys.path.append(os.getcwd())
+
+if __name__ == '__main__':
+    start = time.time()
+
     torch_ga = pygad.torchga.TorchGA(model=globals.agent.current_policy.cpu(), num_solutions=globals.config["n_individuals_per_gen"])
     initial_population = torch_ga.population_weights  # Initial population of network weights
 
@@ -56,7 +63,8 @@ def main():
     globals.pool = Pool(processes=globals.config["n_workers"])
     print(globals.pool)
     ga_instance.run()
-
-if __name__ == '__main__':
-    main()
-
+    
+    wandb.finish()
+    stop = time.strftime('%H:%M:%S', time.gmtime(time.time() - start))
+    print(f"program took {stop}")
+    
