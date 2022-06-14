@@ -124,8 +124,8 @@ class GAfunctions():
         current_pool_id = multiprocessing.current_process()._identity[0] - 2 # dont get why its 2 tm 9
         policy_model_weights_dict = pygad.torchga.model_weights_as_dict(model=agent.current_policy, weights_vector=solution)
         agent.current_policy.load_state_dict(policy_model_weights_dict)
-        agent.current_policy.to(agent.device)
-        
+        # agent.current_policy.to(agent.device)
+
         # initialize env
         episode_ext_reward, total_obs, done, t = [], [], False, 1
         total_int_values, total_ext_values, total_next_int_values, total_next_ext_values, total_dones = [], [], [], [], []
