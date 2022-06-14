@@ -125,6 +125,7 @@ class GAfunctions():
         policy_model_weights_dict = pygad.torchga.model_weights_as_dict(model=agent.current_policy, weights_vector=solution)
         agent.current_policy.load_state_dict(policy_model_weights_dict)
         # agent.current_policy.to(agent.device)
+        print(current_pool_id)
 
         # initialize env
         episode_ext_reward, total_obs, done, t = [], [], False, 1
