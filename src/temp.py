@@ -1,49 +1,78 @@
-import torch
-import numpy as np
 
-timesteps = 16
-n_min_batch = 4
-parallel_envs = 56
-
-mini_batch_size = 128*parallel_envs//4
-fraction = min(32/parallel_envs, 1)
-len_states = 128* parallel_envs
-
-rollout_len = 128
-
-frame = torch.rand((1, 9,9))
-output = torch.nn.MaxPool2d(2,2)(frame)
-print(output.shape)
+workers = [Worker(i, **config) for i in range(config["n_workers"])] 
+parents = []
 
 
-# iteration_idx = [x for x in range(rollout_len//timesteps)] * n_min_batch
-# iteration_idx = np.array(iteration_idx).reshape(4, -1)
-
-# mask = np.random.rand(4, 128//timesteps) <= fraction
-# iteration_idx = [iteration_idx[batch][mask[batch]] for batch in range(n_min_batch)]
-# iteration_idx = [list(range(timesteps*idx, timesteps*idx +timesteps)) for batch_idx in iteration_idx for idx in batch_idx]
-# print(mask)
-# print(iteration_idx)
-# iteration_idx = np.random.choice(sub_array, ) for sub_array in iteration_idx
+for worker in workers:
+    parent_conn, child_conn = Pipe()
+    p = Process(target=run_workers_env_step, args=(worker, child_conn,))
+    p.daemon = True
+    parents.append(parent_conn)
+    p.start()
 
 
+# while iteration
+
+for worker_id, parent in enumerate(parents):
+    total_states[worker_id, t] = parent.recv()
+
+
+for parent, a in zip(parents, total_actions[:, t]):
+    parent.send(a)
+
+for worker_id, parent in enumerate(parents):
+    s_, r, d, info = parent.recv()
+    infos.append(info)
+    total_ext_rewards[worker_id, t] = r
+    total_dones[worker_id, t] = d
+    next_states[worker_id] = s_
+    total_next_obs[worker_id, t] = s_[-1, ...]
+
+def run_workers_env_step(worker, conn):
+    worker.step(conn)
 
 
 
 
-# l = [x for x in range(128*8)]
-# l = torch.Tensor(l).int()
-# l = l.view(-1, 16)
 
-# iteration_idx = [x for x in range(0, len_states, timesteps)]
-# print(iteration_idx, len(iteration_idx))
 
-# chosen_idx = np.random.choice(iteration_idx, size=int(len_states//timesteps * min(32/parallel_envs, 1)), replace=False)
-# print(chosen_idx, len(chosen_idx))
 
-# chosen_idx = np.concatenate([list(range(idx - 1, idx+timesteps)) for idx in chosen_idx])
-# print(chosen_idx[:100])
 
-# indices = np.concatenate([list(range(idx, idx + timesteps)) for batch in indices for idx in batch])
-# indices = np.reshape(indices, (n_min_batch, -1))
-# print(indices[0])
+
+class Worker:
+    def __init__(self, id, **config):
+        self.id = id
+        self.config = config
+        self.env_name = self.config["env"]
+        self.max_episode_steps = self.config["max_frames_per_episode"]
+        self.state_shape = self.config["state_shape"]
+        self.env = make_atari(self.env_name, self.max_episode_steps)
+        self._stacked_states = np.zeros(self.state_shape, dtype=np.uint8)
+        self.reset()
+
+    def __str__(self):
+        return str(self.id)
+
+    def render(self):
+        self.env.render()
+
+    def reset(self):
+        state = self.env.reset()
+        self._stacked_states = stack_states(self._stacked_states, state, True)
+
+    def step(self, conn):
+        t = 1
+        while True:
+            conn.send(self._stacked_states)
+            action = conn.recv()
+            next_state, r, d, info = self.env.step(action)
+            t += 1
+            if t % self.max_episode_steps == 0:
+                d = True
+            if self.config["render"]:
+                self.render()
+            self._stacked_states = stack_states(self._stacked_states, next_state, False)
+            conn.send((self._stacked_states, np.sign(r), d, info))
+            if d:
+                self.reset()
+                t = 1

@@ -15,6 +15,7 @@ import sys, os
 import wandb
 import time
 from multiprocessing import Pool, Process, Pipe
+from runner import Worker
 
 sys.path.append(os.getcwd())
 
@@ -41,14 +42,17 @@ class PooledGA(pygad.GA):
 
         manager = multiprocessing.Manager()
         return_dict = manager.dict()
+        workers = [Worker(i, **config) for i in range(config["n_workers"])] 
+        parents = []
 
-        for i in range(globals.config["n_workers"]):
-            p = Process(target=GAfunctions.fitness_wrapper, args=(self.population[i], return_dict, i))
-            jobs.append(p)
+        for i, worker in enumerate(workers):
+            parent_conn, child_conn = Pipe()
+            p = Process(target=GAfunctions.fitness_wrapper, args=(self.population[i], worker, child_conn,))
             p.daemon = True
+            parents.append(parent_conn)
             p.start()
-        for proc in jobs:
-            proc.join()
+
+        print("workers build")
 
         outputs = return_dict.values()
         logger.time_stop("Env Time")
@@ -141,7 +145,10 @@ class GAfunctions():
         globals.logger.time_stop("Mutation Time")
 
     @staticmethod   
-    def fitness_wrapper(solution, process_results, i):
+    def fitness_wrapper(solution, worker, conn):
+        worker, conn
+        worker.step(conn)
+
         process_results[i] = GAfunctions.fitness_func(solution, 0)
         
 

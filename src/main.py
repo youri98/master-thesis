@@ -64,6 +64,8 @@ if __name__ == '__main__':
     print("ga instantiated")
     print(globals.config)
 
+
+
     ga_instance.run()
 
     wandb.finish()
