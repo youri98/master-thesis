@@ -138,7 +138,7 @@ class GAfunctions():
         
         # rollout length / until dead
         while t <= config["max_frames_per_episode"] and not done and t <= 700:
-            state = torch.from_numpy(_stacked_states).to(agent.device)
+            state = torch.from_numpy(_stacked_states)#.to(agent.device)
             
             with torch.no_grad():
                 int_value, ext_value, action_prob = agent.current_policy(torch.unsqueeze(state.type(torch.float), 0))
@@ -156,7 +156,7 @@ class GAfunctions():
             _stacked_states = stack_states(_stacked_states, next_state, False)
             next_obs = _stacked_states[-1, ...]
 
-            next_state = torch.from_numpy(_stacked_states).to(agent.device)
+            next_state = torch.from_numpy(_stacked_states)#.to(agent.device)
 
             with torch.no_grad():
                 next_int_value, next_ext_value, _= agent.current_policy(torch.unsqueeze(next_state.type(torch.float), 0))
