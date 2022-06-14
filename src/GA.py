@@ -145,8 +145,7 @@ class GAfunctions():
 
     @staticmethod   
     def fitness_wrapper(solution, worker):
-        return 1
-        # return GAfunctions.fitness_func(solution, 0)
+        return GAfunctions.fitness_func(solution, 0)
         
 
     @staticmethod
