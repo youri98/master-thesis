@@ -94,6 +94,10 @@ class GAfunctions():
         ga_instance.best_solutions_fitness = []
     
     @staticmethod
+    def on_start(ga_instance):
+        print("on_start()")
+
+    @staticmethod
     def on_fitness(ga_instance, population_fitness):
         print("on_fitness()")
     

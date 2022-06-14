@@ -48,6 +48,7 @@ def main():
                         on_mutation=GAfunctions.on_mutation,
                         on_fitness=GAfunctions.on_fitness,
                         on_crossover=GAfunctions.on_crossover,
+                        on_start=GAfunctions.on_start,
                         save_best_solutions=False) # might use this for GAETL
                         # sol_per_pop=10,
                         # num_genes=300)

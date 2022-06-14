@@ -5,7 +5,7 @@
 #SBATCH --error=slurm-%j.err
 #SBATCH --output=slurm-%j.out
 #SBATCH --time=24:00:00
-#SBATCH --gres=gpu:0
+#SBATCH --gres=gpu:1
 
 module load cuda10.2/toolkit/10.2.89
 
