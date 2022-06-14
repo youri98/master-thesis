@@ -29,7 +29,6 @@ from collections import deque
 from GA import GAfunctions, PooledGA
 import globals
 import sys, os
-from main import main
 import wandb
 import time
 
@@ -63,7 +62,7 @@ if __name__ == '__main__':
     globals.pool = Pool(processes=globals.config["n_workers"])
     print(globals.pool)
     ga_instance.run()
-    
+
     wandb.finish()
     stop = time.strftime('%H:%M:%S', time.gmtime(time.time() - start))
     print(f"program took {stop}")
