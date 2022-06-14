@@ -35,7 +35,7 @@ class APE:
         self.n_actions = self.config["n_actions"]
         self.prev_disc_losses = None
 
-        self.current_policy = PolicyModel(self.config["state_shape"], self.config["n_actions"]).to(self.device)
+        self.current_policy = PolicyModel(self.config["state_shape"], self.config["n_actions"])
         self.predictor_model = PredictorModel(self.obs_shape).to(self.device)
         self.target_model = TargetModel(self.obs_shape, self.encoding_size).to(self.device)
 
@@ -54,11 +54,11 @@ class APE:
             print("Let's use", torch.cuda.device_count(), "GPUs!")
     
             self.predictor_model = DataParallel(self.predictor_model)
-            self.current_policy = DataParallel(self.current_policy)
+            # self.current_policy = DataParallel(self.current_policy)
             self.target_model = DataParallel(self.target_model)
             self.target_model.to(self.device)
             self.predictor_model.to(self.device)
-            self.current_policy.to(self.device)
+            # self.current_policy.to(self.device)
 
         # self.pol_optimizer = Adam(self.current_policy.parameters(), lr=self.config["lr"])
         self.pred_optimizer = Adam(self.predictor_model.parameters(), lr=self.config["lr"])
