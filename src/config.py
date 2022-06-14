@@ -1,11 +1,12 @@
 import argparse
 import multiprocessing
+import gym
 
 def get_params():
     parser = argparse.ArgumentParser(
         description="Variable parameters based on the configuration of the machine or user's choice")
 
-    parser.add_argument("--n_workers", default=2, type=int, help="Number of parallel environments.")
+    parser.add_argument("--n_workers", default=multiprocessing.cpu_count(), type=int, help="Number of parallel environments.")
     parser.add_argument("--interval", default=100, type=int,
                         help="The interval specifies how often different parameters should be saved and printed,"
                              " counted by iterations.")
@@ -67,4 +68,9 @@ def get_params():
 
     # endregion
     total_params = {**vars(parser_params), **default_params}
+    total_params.update({"predictor_proportion": min(1, 32 / total_params["n_workers"])})
+    temp_env = gym.make(total_params["env"])
+    total_params.update({"n_actions": temp_env.action_space.n})
+    temp_env.close()
+
     return total_params

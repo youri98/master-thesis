@@ -45,6 +45,19 @@ class Logger:
                       "Ext Value Loss",  "Int Value Loss", "Advantage", "RND Loss", "Entrinsic Reward", "Entropy", "Recording", "Recording Int Reward", "LALA"]
         self.scores = {k: [] for k in scoreskeys}
 
+
+        if not self.config["verbose"]:
+            os.environ["WANDB_SILENT"] = "true"   
+        else:
+            print("params:", config)
+
+        with open("key.txt", "r") as personal_key:
+            if personal_key is not None:
+                os.environ["WANDB_API_KEY"] = personal_key.read().strip()
+
+
+
+
         #self.exp_avg = lambda x, y: 0.9 * x + 0.1 * y if (y != 0).all() else y
 
     def reboot(self):

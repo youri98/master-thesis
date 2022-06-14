@@ -22,7 +22,6 @@ class APE:
     def __init__(self, timesteps=1, rnd_predictor=False, encoding_size=512, multiple_feature_pred=False, use_gan_loss=False, **config):
 
         self.config = config
-        self.mini_batch_size = self.config["batch_size"]
         self.device =  torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
         self.obs_shape = self.config["obs_shape"]
         self.state_shape = self.config["state_shape"]
@@ -272,7 +271,7 @@ class APE:
         #     intrinsic_rewards = intrinsic_rewards.to(torch.float32).cpu().numpy()
 
         gamma = self.config["int_gamma"]  # Make code faster.
-        intrinsic_returns = [[] for _ in range(self.config["n_workers"])]
+        intrinsic_returns = [[] for _ in range(self.config["n_individuals_per_gen"])]
         for indiv_idx, individual in enumerate(pop_intrinsic_rewards):
             rewems = 0
             for step in reversed(range(len(individual))):
