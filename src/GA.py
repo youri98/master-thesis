@@ -14,13 +14,15 @@ import globals
 import sys, os
 import wandb
 import time
+from multiprocessing import Pool
 
 sys.path.append(os.getcwd())
 
 class PooledGA(pygad.GA):
 
     def cal_pop_fitness(self):
-        agent, config, logger, pool = globals.agent, globals.config, globals.logger, globals.pool
+        agent, config, logger = globals.agent, globals.config, globals.logger
+
         print("calculating population fitness...")
         if not hasattr(self, "frames"):
             self.frames = 0
@@ -32,7 +34,13 @@ class PooledGA(pygad.GA):
 
         # play in env
         logger.time_start()
-        output = pool.map(GAfunctions.fitness_wrapper, self.population)
+
+        # change this to something else than pool
+        with Pool(processes=globals.config["n_workers"]) as pool:
+            print("A")
+            output = pool.map(GAfunctions.fitness_wrapper, self.population)
+            print("B")
+
         logger.time_stop("Env Time")
 
         total_ext_rewards, episode_logs, observations, int_values, ext_values, next_int_values, next_ext_values, dones = zip(*output)
