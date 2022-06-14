@@ -1,13 +1,11 @@
 import sys, os
 sys.path.append(os.getcwd())
 
-from config import get_params
 from main import main
 import wandb
 import time
 
 if __name__ == '__main__':
-    config = get_params()
     start = time.time()
     main()
     wandb.finish()
