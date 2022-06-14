@@ -32,6 +32,14 @@ class Logger:
         self.running_last_10_ext_r = 0
         self.best_score = 0
         self.timer = {}
+        if not self.config["verbose"]:
+            os.environ["WANDB_SILENT"] = "true"   
+        else:
+            print("params:", config)
+
+        with open("key.txt", "r") as personal_key:
+            if personal_key is not None:
+                os.environ["WANDB_API_KEY"] = personal_key.read().strip()
 
         self.run_id = wandb.util.generate_id()
         wandb.init(project="Genetic", entity="youri",
@@ -46,14 +54,6 @@ class Logger:
         self.scores = {k: [] for k in scoreskeys}
 
 
-        if not self.config["verbose"]:
-            os.environ["WANDB_SILENT"] = "true"   
-        else:
-            print("params:", config)
-
-        with open("key.txt", "r") as personal_key:
-            if personal_key is not None:
-                os.environ["WANDB_API_KEY"] = personal_key.read().strip()
 
 
 
