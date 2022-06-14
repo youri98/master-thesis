@@ -36,7 +36,7 @@ class APE:
         self.prev_disc_losses = None
 
         self.current_policy = PolicyModel(self.config["state_shape"], self.config["n_actions"]).to(self.device)
-        self.predictor_model = PredictorModelRND(self.obs_shape).to(self.device)
+        self.predictor_model = PredictorModel(self.obs_shape).to(self.device)
         self.target_model = TargetModel(self.obs_shape, self.encoding_size).to(self.device)
 
         # self.current_policy.requires_grad_(False)
