@@ -14,7 +14,7 @@ import globals
 import sys, os
 import wandb
 import time
-from multiprocessing import Pool
+from multiprocessing import Pool, Process, Pipe
 
 sys.path.append(os.getcwd())
 
@@ -36,9 +36,14 @@ class PooledGA(pygad.GA):
         logger.time_start()
 
         # change this to something else than pool
+        for i in range(globals.config["n_workers"]):
+            p = Process(target=GAfunctions.fitness_wrapper, args=(self.population,))
+            p.start()
+            p.join()
+
         with Pool(processes=globals.config["n_workers"]) as pool:
             print("A")
-            output = pool.map(GAfunctions.fitness_wrapper, self.population)
+            output = pool.map(GAfunctions.fitness_wrapper, )
             print("B")
 
         logger.time_stop("Env Time")
