@@ -63,9 +63,9 @@ if __name__ == '__main__':
 
     print("ga instantiated")
     print(globals.config)
-    globals.pool = Pool(processes=globals.config["n_workers"])
-    print(globals.pool)
-    ga_instance.run()
+    with Pool(processes=globals.config["n_workers"]) as globals.pool:
+        print(globals.pool)
+        ga_instance.run()
 
     wandb.finish()
     stop = time.strftime('%H:%M:%S', time.gmtime(time.time() - start))

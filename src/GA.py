@@ -11,6 +11,11 @@ from utils import *
 import pygad.gacnn
 from torch.distributions.categorical import Categorical
 import globals
+import sys, os
+import wandb
+import time
+
+sys.path.append(os.getcwd())
 
 class PooledGA(pygad.GA):
 

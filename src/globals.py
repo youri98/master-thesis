@@ -2,7 +2,11 @@ from config import get_params
 from ape import APE
 from logger import Logger
 from utils import *
+import sys, os
+import wandb
+import time
 
+sys.path.append(os.getcwd())
 
 config = get_params()
 agent = APE(**config)
