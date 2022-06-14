@@ -62,6 +62,7 @@ if __name__ == '__main__':
                         # num_genes=300)
 
     print("ga instantiated")
+    print(globals.config)
     globals.pool = Pool(processes=globals.config["n_workers"])
     print(globals.pool)
     ga_instance.run()
