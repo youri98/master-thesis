@@ -35,7 +35,7 @@ class APE:
         self.n_actions = self.config["n_actions"]
         self.prev_disc_losses = None
 
-        self.current_policy = PolicyModel(self.config["state_shape"], self.config["n_actions"])
+        self.current_policy = PolicyModel(self.config["state_shape"], self.config["n_actions"]).to(torch.device("cpu"))
         self.predictor_model = PredictorModel(self.obs_shape).to(self.device)
         self.target_model = TargetModel(self.obs_shape, self.encoding_size).to(self.device)
 

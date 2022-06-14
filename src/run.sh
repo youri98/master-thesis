@@ -1,7 +1,7 @@
 #!/usr/bin/bash
 #SBATCH --partition=mcs.gpu.q
 #SBATCH --nodes=1
-#SBATCH --ntasks=56
+#SBATCH --ntasks=8
 #SBATCH --error=slurm-%j.err
 #SBATCH --output=slurm-%j.out
 #SBATCH --time=24:00:00

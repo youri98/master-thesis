@@ -54,6 +54,7 @@ def main():
                         # num_genes=300)
 
     globals.pool = Pool(processes=globals.config["n_workers"])
+    print(globals.pool)
     ga_instance.run()
 
 if __name__ == '__main__':
