@@ -7,7 +7,6 @@ from torch.nn import functional as F
 from utils import conv_shape, pool_shape
 import torch
 from torch import autocast
-import pygad
 import pygad.torchga
 import pygad.cnn
 
@@ -114,10 +113,10 @@ class TargetModel(nn.Module, ABC):
         return self.seq(state)
 
 
-class PredictorModelRND(nn.Module, ABC):
+class PredictorModel(nn.Module, ABC):
 
     def __init__(self, state_shape):
-        super(PredictorModelRND, self).__init__()
+        super(PredictorModel, self).__init__()
         self.state_shape = state_shape
         c, w, h = state_shape
         self.conv1 = nn.Conv2d(in_channels=c, out_channels=32, kernel_size=8, stride=4)

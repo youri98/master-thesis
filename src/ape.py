@@ -1,6 +1,6 @@
 from scipy.misc import derivative
 import wandb
-from ape_models import PolicyModel, TargetModel, PredictorModelRND
+from ape_models import PolicyModel, TargetModel, PredictorModel
 import torch
 import numpy as np
 from torch.optim.adam import Adam
