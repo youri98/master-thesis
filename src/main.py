@@ -31,7 +31,7 @@ import globals
 
 def main():
     
-    torch_ga = pygad.torchga.TorchGA(model=globals.agent.current_policy, num_solutions=globals.config["n_individuals_per_gen"])
+    torch_ga = pygad.torchga.TorchGA(model=globals.agent.current_policy.cpu(), num_solutions=globals.config["n_individuals_per_gen"])
 
     initial_population = torch_ga.population_weights  # Initial population of network weights
 
