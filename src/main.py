@@ -40,6 +40,8 @@ if __name__ == '__main__':
     torch_ga = pygad.torchga.TorchGA(model=globals.agent.current_policy.cpu(), num_solutions=globals.config["n_individuals_per_gen"])
     initial_population = torch_ga.population_weights  # Initial population of network weights
 
+    print(np.concatenate(initial_population).shape)
+
     ga_instance = PooledGA(num_generations=globals.config["num_generations"],
                         num_parents_mating=globals.config["num_parents_mating"],
                         parent_selection_type=globals.config["parent_selection_type"],
@@ -59,6 +61,7 @@ if __name__ == '__main__':
                         # sol_per_pop=10,
                         # num_genes=300)
 
+    print("ga instantiated")
     globals.pool = Pool(processes=globals.config["n_workers"])
     print(globals.pool)
     ga_instance.run()
