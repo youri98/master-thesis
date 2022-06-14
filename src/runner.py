@@ -1,5 +1,6 @@
 from utils import stack_states, make_atari
 import numpy as np
+from GA import GAfunctions
 
 
 class Worker:
@@ -23,7 +24,8 @@ class Worker:
         state = self.env.reset()
         self._stacked_states = stack_states(self._stacked_states, state, True)
 
-    def step(self, conn):
+    def step(self, conn, solution):
+        GAfunctions.fitness_func()
         t = 1
         while True:
             conn.send(self._stacked_states)

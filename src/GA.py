@@ -46,9 +46,12 @@ class PooledGA(pygad.GA):
         parents = []
 
         for i, worker in enumerate(workers):
-            p = Process(target=GAfunctions.fitness_wrapper, args=(self.population[i], worker,))
+            parent_conn, child_conn = Pipe()
+            p = Process(target=worker_step, args=(self.population[i], worker, child_conn,))
             p.daemon = True
+            parents.append(parent_conn)
             p.start()
+
         
 
         print("workers build")
@@ -142,6 +145,11 @@ class GAfunctions():
     def on_mutation(ga_instance, offspring_mutation):
         print("on_mutation()")
         globals.logger.time_stop("Mutation Time")
+
+
+    def run_workers_env_step(solution, worker, conn):
+        worker.step(conn, solution)
+
 
     @staticmethod   
     def fitness_wrapper(solution, worker):
