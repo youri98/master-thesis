@@ -36,19 +36,24 @@ class PooledGA(pygad.GA):
         logger.time_start()
 
         # change this to something else than pool
+        jobs = []
+        # process_results = [[] for _ in range(globals.config["n_workers"])]
+
+        manager = multiprocessing.Manager()
+        return_dict = manager.dict()
+
         for i in range(globals.config["n_workers"]):
-            p = Process(target=GAfunctions.fitness_wrapper, args=(self.population,))
+            p = Process(target=GAfunctions.fitness_wrapper, args=(self.population[i], return_dict, i))
+            jobs.append(p)
+            p.daemon = True
             p.start()
-            p.join()
+        for proc in jobs:
+            proc.join()
 
-        with Pool(processes=globals.config["n_workers"]) as pool:
-            print("A")
-            output = pool.map(GAfunctions.fitness_wrapper, )
-            print("B")
-
+        outputs = return_dict.values()
         logger.time_stop("Env Time")
 
-        total_ext_rewards, episode_logs, observations, int_values, ext_values, next_int_values, next_ext_values, dones = zip(*output)
+        total_ext_rewards, episode_logs, observations, int_values, ext_values, next_int_values, next_ext_values, dones = zip(*outputs)
         indices = [len(obs) for obs in observations]
         indices.insert(0, 0)
         indices = np.cumsum(indices)
@@ -136,14 +141,15 @@ class GAfunctions():
         globals.logger.time_stop("Mutation Time")
 
     @staticmethod   
-    def fitness_wrapper(solution):
-        return GAfunctions.fitness_func(solution, 0)
+    def fitness_wrapper(solution, process_results, i):
+        process_results[i] = GAfunctions.fitness_func(solution, 0)
+        
 
     @staticmethod
     def fitness_func(solution, sol_idx):
         envs, config, agent = globals.envs, globals.config, globals.agent
 
-        current_pool_id = multiprocessing.current_process()._identity[0] - 2 # dont get why its 2 tm 9
+        current_pool_id = multiprocessing.current_process()._identity[0] - 3 # dont get why its 2 tm 9
         policy_model_weights_dict = pygad.torchga.model_weights_as_dict(model=agent.current_policy, weights_vector=solution)
         agent.current_policy.load_state_dict(policy_model_weights_dict)
         # agent.current_policy.to(agent.device)
