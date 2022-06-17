@@ -22,7 +22,7 @@ torch.autograd.set_detect_anomaly(True)
 def run_workers_env_step(worker, conn):
     worker.step(conn)
 
-def train_model(config, **kwargs):
+def train_model(config, add_noisy_tv=False, **kwargs):
     print("STARTED")
     with open("key.txt", "r") as personal_key:
         if personal_key is not None:
@@ -141,11 +141,19 @@ def train_model(config, **kwargs):
                 infos = []
                 for worker_id, parent in enumerate(parents):
                     s_, r, d, info = parent.recv()
+
+
                     infos.append(info)
                     total_ext_rewards[worker_id, t] = r
                     total_dones[worker_id, t] = d
                     next_states[worker_id] = s_
-                    total_next_obs[worker_id, t] = s_[-1, ...]
+
+                    if add_noisy_tv:
+                        obs_ = noisy_tv(s_[-1, ...])
+                    else:
+                        obs_ = s_[-1, ...]
+
+                    total_next_obs[worker_id, t] = obs_
 
                     if worker_id == 0:
                         recording.append(s_[-1, ...])
@@ -205,6 +213,10 @@ def train_model(config, **kwargs):
             
             recording = np.stack(recording)
             logger.log_recording(iteration, recording)
+            # np.save(f"frame{iteration}.npy" , recording[23])
+
+            # wandb.log({"image": wandb.Image(recording[23])}, step=iteration)
+
             logger.time_stop("logging time")
             logger.time_start()
             logger.save_recording_local(iteration, recording)
@@ -218,13 +230,22 @@ def train_model(config, **kwargs):
             recording = []
             recording_int_rewards = []
 
+def noisy_tv(obs):
+    selection = obs[40:60, 70:]
+    frame = np.load("empty_frame.npy")[40:60, 70:]
 
+    # check if agent is at location
+    if np.sum(selection - frame) != 0: # this is the default 
+        # add noisy tv in topright of the screen
+        obs[:15, 69:] = np.random.randint(0, 128, size=(15, 15)) 
+
+    return obs
 
 if __name__ == '__main__':
     #delete_files()
     config = get_params()
-    config["algo"] = "APE"
-    config["total_rollouts"] = 20
+    config["algo"] = "RND"
+    config["total_rollouts"] = 100
     config["verbose"] = True
     config["record"] = True
     # # run 1
@@ -232,9 +253,9 @@ if __name__ == '__main__':
     # config["total_rollouts"] = int(7)
     # config["algo"] = "RND"
     # config["verbose"] = True
-    config["interval"] = 5
+    config["interval"] = 100
 
-    train_model(config)
+    train_model(config, add_noisy_tv=True)
     wandb.finish()
 
 
