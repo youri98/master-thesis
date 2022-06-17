@@ -231,13 +231,13 @@ def train_model(config, add_noisy_tv=False, **kwargs):
             recording_int_rewards = []
 
 def noisy_tv(obs):
-    selection = obs[40:60, 70:]
-    frame = np.load("empty_frame.npy")[40:60, 70:]
+    selection = obs[20:40, 20:30]
+    frame = np.load("noisy.npy")[20:40, 20:30]
 
     # check if agent is at location
-    if np.sum(selection - frame) != 0: # this is the default 
+    if np.sum(selection - frame) < 6466: # this is the default 
         # add noisy tv in topright of the screen
-        obs[:15, 69:] = np.random.randint(0, 128, size=(15, 15)) 
+        obs[74:, :10] = np.random.randint(0, 128, size=(10, 10)) 
 
     return obs
 
