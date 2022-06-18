@@ -235,7 +235,7 @@ def noisy_tv(obs):
     frame = np.load("empty_frame.npy")[40:60, 70:]
 
     # check if agent is at location
-    if np.sum(selection - frame) != 0: # this is the default 
+    if np.mean(np.abs(selection - frame)) > 0 and np.mean(np.abs(selection - frame)) < 2: # try to dont show it for following rooms
         # add noisy tv in topright of the screen
         obs[:15, 69:] = np.random.randint(0, 128, size=(15, 15)) 
 
