@@ -3,7 +3,6 @@ import numpy as np
 from numpy import concatenate
 import gym
 from tqdm import tqdm
-from ape import APE
 from rnd import RND
 from logger import Logger
 from torch.multiprocessing import Process, Pipe
@@ -244,7 +243,7 @@ def noisy_tv(obs):
 if __name__ == '__main__':
     #delete_files()
     config = get_params()
-    config["algo"] = "RND"
+    config["algo"] = "RND-Bayes"
     config["total_rollouts"] = 100
     config["verbose"] = True
     config["record"] = True
@@ -255,7 +254,7 @@ if __name__ == '__main__':
     # config["verbose"] = True
     config["interval"] = 100
 
-    train_model(config, add_noisy_tv=True)
+    train_model(config, add_noisy_tv=False)
     wandb.finish()
 
 

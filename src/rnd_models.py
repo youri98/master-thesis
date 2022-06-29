@@ -5,6 +5,7 @@ from torch.nn import functional as F
 from torch.distributions.categorical import Categorical
 # from torchsummary import summary
 import torch
+from blitz.modules import BayesianLinear, BayesianConv2d
 
 def conv_shape(input_dims, kernel_size, stride, padding=0):
     return ((input_dims[0] + 2 * padding - kernel_size) // stride + 1,
@@ -156,3 +157,49 @@ class PredictorModel(nn.Module, ABC):
         x = F.relu(self.fc2(x))
 
         return self.encoded_features(x)
+
+
+class BayesianPredictorModel(nn.Module, ABC):
+
+    def __init__(self, state_shape):
+        super(BayesianPredictorModel, self).__init__()
+        self.state_shape = state_shape
+        c, w, h = state_shape
+        self.conv1 = BayesianConv2d(in_channels=c, out_channels=32, kernel_size=(8,8), stride=4)
+        self.conv2 = BayesianConv2d(in_channels=32, out_channels=64, kernel_size=(4,4), stride=2)
+        self.conv3 = BayesianConv2d(in_channels=64, out_channels=64, kernel_size=(3,3), stride=1)
+
+        color, w, h = state_shape
+        conv1_out_shape = conv_shape((w, h), 8, 4)
+        conv2_out_shape = conv_shape(conv1_out_shape, 4, 2)
+        conv3_out_shape = conv_shape(conv2_out_shape, 3, 1)
+
+        flatten_size = conv3_out_shape[0] * conv3_out_shape[1] * 64
+
+        self.fc1 = BayesianLinear(in_features=flatten_size, out_features=512)
+        self.fc2 = BayesianLinear(in_features=512, out_features=512)
+        self.encoded_features = BayesianLinear(in_features=512, out_features=512)
+
+        for layer in self.modules():
+            if isinstance(layer, BayesianConv2d):
+                nn.init.orthogonal_(layer.weight_mu, gain=np.sqrt(2))
+                layer.bias_mu.data.zero_()
+            elif isinstance(layer, BayesianLinear):
+                nn.init.orthogonal_(layer.weight_mu, gain=np.sqrt(2))
+                layer.bias_mu.data.zero_()
+
+    def forward(self, inputs, k_samples=1):
+        result = torch.ones(k_samples, inputs.shape[0], 512)
+        for i in range(k_samples):
+            x = inputs
+            x = F.leaky_relu(self.conv1(x))
+            x = F.leaky_relu(self.conv2(x))
+            x = F.leaky_relu((self.conv3(x)))
+            x = x.contiguous()
+            x = x.view(x.size(0), -1)
+            x = F.relu(self.fc1(x))
+            x = F.relu(self.fc2(x))
+            x = self.encoded_features(x)
+            result[i] = x
+        
+        return torch.mean(result, 0)

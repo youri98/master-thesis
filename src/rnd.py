@@ -1,4 +1,4 @@
-from rnd_models import PolicyModel, PredictorModel, TargetModel
+from rnd_models import *
 import torch
 from torch import from_numpy
 import numpy as np
@@ -33,7 +33,12 @@ class RND:
         self.state_shape = self.config["state_shape"]
 
         self.current_policy = PolicyModel(self.config["state_shape"], self.config["n_actions"]).to(self.device)
-        self.predictor_model = PredictorModel(self.obs_shape).to(self.device)
+        if self.config['algo'] == "RND":
+            self.predictor_model = PredictorModel(self.obs_shape).to(self.device)
+        if self.config['algo'] == "RND-Bayes":
+            self.predictor_model = BayesianPredictorModel(self.obs_shape).to(self.device)
+
+        
         self.target_model = TargetModel(self.obs_shape).to(self.device)
         for param in self.target_model.parameters():
             param.requires_grad = False
@@ -86,11 +91,12 @@ class RND:
         ext_returns = torch.Tensor(ext_returns).to(self.device)
         log_probs = torch.Tensor(log_probs).to(self.device)
 
-        indices = np.random.randint(0, len(states), (self.config["n_mini_batch"], self.mini_batch_size))
-        if self.config["n_workers"] > 32:
-            fraction = 32 / self.config["n_workers"] 
-            mask = np.random.rand(indices.shape[1]) <= fraction
-            indices = indices[:, mask]
+        fraction = 1 if self.config["n_workers"] <= 32 else 32 / self.config["n_workers"]
+
+        indices = np.random.randint(0, len(states), (self.config["n_mini_batch"], int(np.ceil(self.mini_batch_size * fraction))))
+
+
+
         indices = np.reshape(indices, (self.config["n_mini_batch"], -1))
 
         for idx in indices:
@@ -191,7 +197,7 @@ class RND:
         next_states = np.clip((next_states - self.state_rms.mean) / (self.state_rms.var ** 0.5), -5, 5,
                               dtype="float32")  # dtype to avoid '.float()' call for pytorch.
         next_states = from_numpy(next_states).to(self.device)
-        predictor_encoded_features = self.predictor_model(next_states)
+        predictor_encoded_features = self.predictor_model(next_states, k_samples=5)
         target_encoded_features = self.target_model(next_states)
 
         int_reward = (predictor_encoded_features - target_encoded_features).pow(2).mean(1)
