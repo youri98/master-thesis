@@ -155,7 +155,7 @@ class RND:
 
                 critic_loss = 0.5 * (int_value_loss + ext_value_loss)
 
-                rnd_loss = self.calculate_rnd_loss(next_state)
+                rnd_loss = self.calculate_rnd_loss(next_state, 1)
 
                 total_loss = critic_loss + pg_loss - self.config["ent_coeff"] * entropy + rnd_loss
                 self.optimize(total_loss)
@@ -197,7 +197,7 @@ class RND:
         next_states = np.clip((next_states - self.state_rms.mean) / (self.state_rms.var ** 0.5), -5, 5,
                               dtype="float32")  # dtype to avoid '.float()' call for pytorch.
         next_states = from_numpy(next_states).to(self.device)
-        predictor_encoded_features = self.predictor_model(next_states, k_samples=5)
+        predictor_encoded_features = self.predictor_model(next_states, 5)
         target_encoded_features = self.target_model(next_states)
 
         int_reward = (predictor_encoded_features - target_encoded_features).pow(2).mean(1)
