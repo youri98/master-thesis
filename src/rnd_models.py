@@ -216,7 +216,7 @@ class BayesianPredictorModel(nn.Module, ABC):
                                  self.fc3)
 
     def forward(self, inputs, k_samples=3):
-        result = torch.ones(k_samples, inputs.shape[0], 512)
+        result = torch.ones(k_samples, inputs.shape[0], 512).to(self.device)
         for i in range(k_samples):
             result[i] = self.seq(inputs)
 
@@ -232,7 +232,7 @@ class KPredictorModel(nn.Module, ABC):
         self.predictors = [PredictorModel(self.state_shape) for _ in range(k)]
 
     def forward(self, inputs, k_samples=None):
-        result = torch.ones(self.k, inputs.shape[0], 512)
+        result = torch.ones(self.k, inputs.shape[0], 512).to(self.device)
 
         for i in range(self.k):
             result[i] = self.predictors[i](inputs)
