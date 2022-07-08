@@ -35,10 +35,8 @@ def train_model(config, add_noisy_tv=False, **kwargs):
     config.update({"predictor_proportion": 32 / config["n_workers"]})
     workers = [Worker(i, **config) for i in range(config["n_workers"])] 
 
-    if config['algo'] == 'APE':
-        agent = APE(**kwargs, **config)
-    else:
-        agent = RND(**kwargs, **config)
+
+    agent = RND(**kwargs, **config)
 
 
     logger = Logger(agent, **config)
