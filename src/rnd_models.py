@@ -129,6 +129,8 @@ class PredictorModel(nn.Module, ABC):
 
     def __init__(self, state_shape, mcdropout=0):
         super(PredictorModel, self).__init__()
+        self.device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+
         self.state_shape = state_shape
         c, w, h = state_shape
         self.conv1 = nn.Conv2d(
@@ -179,6 +181,8 @@ class BayesianPredictorModel(nn.Module, ABC):
 
     def __init__(self, state_shape):
         super(BayesianPredictorModel, self).__init__()
+        self.device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+
         self.state_shape = state_shape
         c, w, h = state_shape
         self.conv1 = BayesianConv2d(
@@ -228,6 +232,7 @@ class KPredictorModel(nn.Module, ABC):
         super(KPredictorModel, self).__init__()
         self.state_shape = state_shape
         self.k = k
+        self.device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
         self.predictors = [PredictorModel(self.state_shape) for _ in range(k)]
 
