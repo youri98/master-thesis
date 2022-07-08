@@ -185,7 +185,6 @@ def train_model(config, add_noisy_tv=False, **kwargs):
             total_int_rewards = agent.normalize_int_rewards(total_int_rewards)
             
 
-
             training_logs = agent.train(states=concatenate(total_states),
                             actions=total_actions,
                             int_rewards=total_int_rewards,
@@ -243,10 +242,12 @@ def noisy_tv(obs):
 if __name__ == '__main__':
     #delete_files()
     config = get_params()
-    config["algo"] = "RND-Bayes"
-    config["total_rollouts"] = 100
+    config["algo"] = "RND-MC"
+    config["total_rollouts"] = 10
     config["verbose"] = True
     config["record"] = True
+    config["per"] = "proportional"
+
     # # run 1
     # config["env"] = "VentureNoFrameskip-v4"
     # config["total_rollouts"] = int(7)

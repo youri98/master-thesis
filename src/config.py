@@ -9,7 +9,7 @@ def get_params():
     parser.add_argument("--interval", default=100, type=int,
                         help="The interval specifies how often different parameters should be saved and printed,"
                              " counted by iterations.")
-    parser.add_argument("--algo", default="RND", help="Use RND or APE", choices=["RND", "APE"])
+    parser.add_argument("--algo", default="RND", help="Use RND or APE", choices=["RND", "RND-Bayes", "RND-MC", "RND-K"])
     parser.add_argument("--record", default=False, action="store_true", help="Save recording in model folder")
     parser.add_argument("--total_rollouts", default=int(1e1), type=int, help="Total number of rollouts per environment")
     parser.add_argument("--env", default="MontezumaRevengeNoFrameskip-v4", help="Name of the environment to run the model on")
@@ -17,6 +17,7 @@ def get_params():
     parser.add_argument("--verbose", default=False, action="store_true")
     parser.add_argument("--model_name", help="name of model to resume training or to test")
     parser.add_argument("--multiple_gpus", default=False, action="store_true", help="whether the run is on multiple gpus")
+    parser.add_argument("--per", default="rankbased", choices=["rankbased", "proportional"], help="whether to use Prioritized Experience Replay")
 
     # parser.add_argument("--do_test", action="store_true",
     #                     help="The flag determines whether to train the agent or play with it.")

@@ -7,9 +7,11 @@ from torch.distributions.categorical import Categorical
 import torch
 from blitz.modules import BayesianLinear, BayesianConv2d
 
+
 def conv_shape(input_dims, kernel_size, stride, padding=0):
     return ((input_dims[0] + 2 * padding - kernel_size) // stride + 1,
             (input_dims[1] + 2 * padding - kernel_size) // stride + 1)
+
 
 class PolicyModel(nn.Module, ABC):
     def __init__(self, state_shape, n_actions):
@@ -76,7 +78,8 @@ class PolicyModel(nn.Module, ABC):
         # dist = Categorical(probs)
         result = [int_value, ext_value, probs]
 
-        return result #probs, int_value, ext_value, probs
+        return result  # probs, int_value, ext_value, probs
+
 
 class TargetModel(nn.Module, ABC):
 
@@ -85,9 +88,12 @@ class TargetModel(nn.Module, ABC):
         self.state_shape = state_shape
 
         c, w, h = state_shape
-        self.conv1 = nn.Conv2d(in_channels=c, out_channels=32, kernel_size=8, stride=4)
-        self.conv2 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=4, stride=2)
-        self.conv3 = nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1)
+        self.conv1 = nn.Conv2d(
+            in_channels=c, out_channels=32, kernel_size=8, stride=4)
+        self.conv2 = nn.Conv2d(
+            in_channels=32, out_channels=64, kernel_size=4, stride=2)
+        self.conv3 = nn.Conv2d(
+            in_channels=64, out_channels=64, kernel_size=3, stride=1)
 
         color, w, h = state_shape
         conv1_out_shape = conv_shape((w, h), 8, 4)
@@ -96,7 +102,7 @@ class TargetModel(nn.Module, ABC):
 
         flatten_size = conv3_out_shape[0] * conv3_out_shape[1] * 64
 
-        self.encoded_features = nn.Linear(in_features=flatten_size, out_features=512)
+        self.fc = nn.Linear(in_features=flatten_size, out_features=512)
 
         for layer in self.modules():
             if isinstance(layer, nn.Conv2d):
@@ -106,26 +112,31 @@ class TargetModel(nn.Module, ABC):
                 nn.init.orthogonal_(layer.weight, gain=np.sqrt(2))
                 layer.bias.data.zero_()
 
-    def forward(self, inputs):
-        x = inputs
-        x = F.leaky_relu(self.conv1(x))
-        x = F.leaky_relu(self.conv2(x))
-        x = F.leaky_relu((self.conv3(x)))
-        x = x.contiguous()
-        x = x.view(x.size(0), -1)
+        self.seq = nn.Sequential(self.conv1,
+                                 nn.LeakyReLU(),
+                                 self.conv2,
+                                 nn.LeakyReLU(),
+                                 self.conv3,
+                                 nn.LeakyReLU(),
+                                 nn.Flatten(),
+                                 self.fc)
 
-        return self.encoded_features(x)
+    def forward(self, inputs):
+        return self.seq(inputs)
 
 
 class PredictorModel(nn.Module, ABC):
 
-    def __init__(self, state_shape):
+    def __init__(self, state_shape, mcdropout=0):
         super(PredictorModel, self).__init__()
         self.state_shape = state_shape
         c, w, h = state_shape
-        self.conv1 = nn.Conv2d(in_channels=c, out_channels=32, kernel_size=8, stride=4)
-        self.conv2 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=4, stride=2)
-        self.conv3 = nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1)
+        self.conv1 = nn.Conv2d(
+            in_channels=c, out_channels=32, kernel_size=8, stride=4)
+        self.conv2 = nn.Conv2d(
+            in_channels=32, out_channels=64, kernel_size=4, stride=2)
+        self.conv3 = nn.Conv2d(
+            in_channels=64, out_channels=64, kernel_size=3, stride=1)
 
         color, w, h = state_shape
         conv1_out_shape = conv_shape((w, h), 8, 4)
@@ -136,7 +147,7 @@ class PredictorModel(nn.Module, ABC):
 
         self.fc1 = nn.Linear(in_features=flatten_size, out_features=512)
         self.fc2 = nn.Linear(in_features=512, out_features=512)
-        self.encoded_features = nn.Linear(in_features=512, out_features=512)
+        self.fc3 = nn.Linear(in_features=512, out_features=512)
 
         for layer in self.modules():
             if isinstance(layer, nn.Conv2d):
@@ -146,17 +157,22 @@ class PredictorModel(nn.Module, ABC):
                 nn.init.orthogonal_(layer.weight, gain=np.sqrt(2))
                 layer.bias.data.zero_()
 
-    def forward(self, inputs):
-        x = inputs
-        x = F.leaky_relu(self.conv1(x))
-        x = F.leaky_relu(self.conv2(x))
-        x = F.leaky_relu((self.conv3(x)))
-        x = x.contiguous()
-        x = x.view(x.size(0), -1)
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
+        self.seq = nn.Sequential(self.conv1, nn.LeakyReLU(),
+                                 nn.Dropout2d(p=mcdropout),
+                                 self.conv2, nn.LeakyReLU(),
+                                 nn.Dropout2d(p=mcdropout),
+                                 self.conv3, nn.LeakyReLU(),
+                                 nn.Dropout2d(p=mcdropout),
+                                 nn.Flatten(),
+                                 self.fc1, nn.ReLU(),
+                                 nn.Dropout(p=mcdropout),
+                                 self.fc2, nn.ReLU(),
+                                 nn.Dropout(p=mcdropout),
+                                 self.fc3)
+        nn.Dropout(p=mcdropout),
 
-        return self.encoded_features(x)
+    def forward(self, inputs, k_samples=None):
+        return self.seq(inputs)
 
 
 class BayesianPredictorModel(nn.Module, ABC):
@@ -165,9 +181,12 @@ class BayesianPredictorModel(nn.Module, ABC):
         super(BayesianPredictorModel, self).__init__()
         self.state_shape = state_shape
         c, w, h = state_shape
-        self.conv1 = BayesianConv2d(in_channels=c, out_channels=32, kernel_size=(8,8), stride=4)
-        self.conv2 = BayesianConv2d(in_channels=32, out_channels=64, kernel_size=(4,4), stride=2)
-        self.conv3 = BayesianConv2d(in_channels=64, out_channels=64, kernel_size=(3,3), stride=1)
+        self.conv1 = BayesianConv2d(
+            in_channels=c, out_channels=32, kernel_size=(8, 8), stride=4)
+        self.conv2 = BayesianConv2d(
+            in_channels=32, out_channels=64, kernel_size=(4, 4), stride=2)
+        self.conv3 = BayesianConv2d(
+            in_channels=64, out_channels=64, kernel_size=(3, 3), stride=1)
 
         color, w, h = state_shape
         conv1_out_shape = conv_shape((w, h), 8, 4)
@@ -178,7 +197,7 @@ class BayesianPredictorModel(nn.Module, ABC):
 
         self.fc1 = BayesianLinear(in_features=flatten_size, out_features=512)
         self.fc2 = BayesianLinear(in_features=512, out_features=512)
-        self.encoded_features = BayesianLinear(in_features=512, out_features=512)
+        self.fc3 = BayesianLinear(in_features=512, out_features=512)
 
         for layer in self.modules():
             if isinstance(layer, BayesianConv2d):
@@ -188,18 +207,34 @@ class BayesianPredictorModel(nn.Module, ABC):
                 nn.init.orthogonal_(layer.weight_mu, gain=np.sqrt(2))
                 layer.bias_mu.data.zero_()
 
-    def forward(self, inputs, k_samples=1):
+        self.seq = nn.Sequential(self.conv1, nn.LeakyReLU(),
+                                 self.conv2, nn.LeakyReLU(),
+                                 self.conv3, nn.LeakyReLU(),
+                                 nn.Flatten(),
+                                 self.fc1, nn.ReLU(),
+                                 self.fc2, nn.ReLU(),
+                                 self.fc3)
+
+    def forward(self, inputs, k_samples=3):
         result = torch.ones(k_samples, inputs.shape[0], 512)
         for i in range(k_samples):
-            x = inputs
-            x = F.leaky_relu(self.conv1(x))
-            x = F.leaky_relu(self.conv2(x))
-            x = F.leaky_relu((self.conv3(x)))
-            x = x.contiguous()
-            x = x.view(x.size(0), -1)
-            x = F.relu(self.fc1(x))
-            x = F.relu(self.fc2(x))
-            x = self.encoded_features(x)
-            result[i] = x
-        
+            result[i] = self.seq(inputs)
+
+        return torch.mean(result, 0)
+
+
+class KPredictorModel(nn.Module, ABC):
+    def __init__(self, state_shape, k=5):
+        super(KPredictorModel, self).__init__()
+        self.state_shape = state_shape
+        self.k = k
+
+        self.predictors = [PredictorModel(self.state_shape) for _ in range(k)]
+
+    def forward(self, inputs, k_samples=None):
+        result = torch.ones(self.k, inputs.shape[0], 512)
+
+        for i in range(self.k):
+            result[i] = self.predictors[i](inputs)
+
         return torch.mean(result, 0)
