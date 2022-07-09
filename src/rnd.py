@@ -85,7 +85,6 @@ class RND:
             priority_sum = np.sum(np.power(priorities, self.priority_alpha))
             priorities = np.power(priorities, self.priority_alpha) / priority_sum
             indices = range(0, len(values))
-
         else:
             raise ValueError
 
@@ -122,11 +121,12 @@ class RND:
         log_probs = torch.Tensor(log_probs).to(self.device)
 
 
-        if self.config['per']:
-            indices = self.prioritized_sampling(advs)
-        else:
+        if self.config['per'] == "default":
             fraction = 1 if self.config["n_workers"] <= 32 else 32 / self.config["n_workers"]
             indices = np.random.randint(0, len(states), (self.config["n_mini_batch"], int(np.ceil(self.mini_batch_size * fraction))))
+        else:
+            indices = self.prioritized_sampling(advs)
+
 
 
         for idx in indices:

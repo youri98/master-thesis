@@ -156,7 +156,9 @@ def train_model(config, add_noisy_tv=False, **kwargs):
                         recording.append(s_[-1, ...])
 
                 episode_ext_reward += total_ext_rewards[0, t]
+                print(total_dones[0, t])
                 if total_dones[0, t]:
+                    print("episode: ", episode)
                     episode += 1
                     if "episode" in infos[0]:
                         visited_rooms = infos[0]["episode"]["visited_room"]
@@ -244,7 +246,7 @@ if __name__ == '__main__':
     config["total_rollouts"] = 10
     config["verbose"] = True
     config["record"] = True
-    config["per"] = "proportional"
+    config["per"] = "default"
 
     # # run 1
     # config["env"] = "VentureNoFrameskip-v4"

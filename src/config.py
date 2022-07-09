@@ -17,7 +17,7 @@ def get_params():
     parser.add_argument("--verbose", default=False, action="store_true")
     parser.add_argument("--model_name", help="name of model to resume training or to test")
     parser.add_argument("--multiple_gpus", default=False, action="store_true", help="whether the run is on multiple gpus")
-    parser.add_argument("--per", default="rankbased", choices=["rankbased", "proportional"], help="whether to use Prioritized Experience Replay")
+    parser.add_argument("--per", default="default", choices=["default", "rankbased", "proportional"], help="whether to use Prioritized Experience Replay")
 
     # parser.add_argument("--do_test", action="store_true",
     #                     help="The flag determines whether to train the agent or play with it.")
