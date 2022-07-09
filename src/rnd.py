@@ -259,7 +259,7 @@ class RND:
 
     def calculate_rnd_loss(self, next_state):
         encoded_target_features = self.target_model(next_state)
-        encoded_predictor_features = self.predictor_model(next_state)
+        encoded_predictor_features = self.predictor_model(next_state, 1)
         loss = (encoded_predictor_features - encoded_target_features).pow(2).mean(-1)
         # mask = torch.rand(loss.size(), device=self.device)
         # mask = (mask < self.config["predictor_proportion"]).float()
