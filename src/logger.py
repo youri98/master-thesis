@@ -42,7 +42,9 @@ class Logger:
             self.create_model_folder()
 
         scoreskeys = ["Iteration", "N Frames", "Visited Rooms", "Action Probability", "Intrinsic Reward", "PG Loss", "Discriminator Loss", "Gen Loss", "Discriminator L1 Loss", "Generator L1 Loss",
-                      "Ext Value Loss",  "Int Value Loss", "Advantage", "RND Loss", "Entrinsic Reward", "Entropy", "Recording", "Recording Int Reward", "LALA"]
+                      "Ext Value Loss",  "Int Value Loss", "Advantage", "RND Loss", "Extrinsic Reward", "Entropy", "Recording", "Recording Int Reward"]
+
+
         self.scores = {k: [] for k in scoreskeys}
 
         #self.exp_avg = lambda x, y: 0.9 * x + 0.1 * y if (y != 0).all() else y
@@ -107,18 +109,19 @@ class Logger:
             out.release()
 
     def log_episode(self, *args):
-        self.episode, self.episode_ext_reward, self.visited_rooms = args
+        iteration, self.episode, self.episode_ext_reward, self.visited_rooms = args
         self.max_episode_reward = max(
             self.max_episode_reward, self.episode_ext_reward)
-
-        wandb.log({"Episode Ext Reward": self.episode_ext_reward}, step=self.episode)
-        wandb.log({"Ep Visited Rooms": list(self.visited_rooms)}, step=self.episode)
-        wandb.log({"Episode Max Reward":self.max_episode_reward}, step=self.episode)
+        # Episode Extrinsic Reward
+        # Episode Visited Rooms
+        # Episode Maximum Reward
+        wandb.log({"Episode Extrinsic Reward": self.episode_ext_reward, "Episode Visited Rooms": len(
+            self.visited_rooms), "Episode Maximum Reward": self.max_episode_reward,
+            "Episode": self.episode}, step=iteration)
 
     def save_score_to_json(self):
         with open("Models/" + self.log_dir + '/scores.json', 'w') as file:
             norm_scores = {k: (v if k in ["N Frames", "Discriminator Loss", "Visited Rooms", "Iteration", "Recording"] or np.linalg.norm(v) == 0 else (v/np.linalg.norm(v)).tolist()) for k,v in self.scores.items()}
-
 
             file.write(json.dumps(norm_scores))
 
@@ -137,7 +140,7 @@ class Logger:
             "N Frames": n_frames,
             "Action Probability": action_prob,
             "Intrinsic Reward": int_reward.item(),
-            "Entrinsic Reward": ext_reward.item(),
+            "Extrinsic Reward": ext_reward.item(),
             "PG Loss": pg_losses,
             "Ext Value Loss": ext_value_losses,
             "Int Value Loss": int_value_losses,
@@ -148,13 +151,8 @@ class Logger:
             # "Extrinsic Explained variance": self.running_training_logs[6],
         }
 
-        if self.config['algo'] == 'APE':
-            params["Discriminator Loss"] = disc_losses
-            params["Generator L1 Loss"] = gen_l1_losses
-            params["Discriminator L1 Loss"] = disc_l1_losses
-            params["Gen Loss"] = rnd_losses
-        else:
-            params["RND Loss"] = rnd_losses
+
+        params["RND Loss"] = rnd_losses
 
 
         self.scores['Iteration'].append(iteration)

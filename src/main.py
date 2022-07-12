@@ -99,7 +99,7 @@ def train_model(config, add_noisy_tv=False, **kwargs):
         init_action_probs = np.zeros(rollout_base_shape + (config["n_actions"],))
         init_int_rewards = np.zeros(rollout_base_shape)
         init_ext_rewards = np.zeros(rollout_base_shape)
-        init_dones = np.zeros(rollout_base_shape, dtype=np.bool)
+        init_dones = np.zeros(rollout_base_shape, dtype=bool)
         init_int_values = np.zeros(rollout_base_shape)
         init_ext_values = np.zeros(rollout_base_shape)
         init_log_probs = np.zeros(rollout_base_shape)
@@ -156,13 +156,16 @@ def train_model(config, add_noisy_tv=False, **kwargs):
                         recording.append(s_[-1, ...])
 
                 episode_ext_reward += total_ext_rewards[0, t]
-                # print(total_dones[0, t])
+                
+                # if any(np.ravel(total_dones)):
+                #     print("heee")
+                
                 if total_dones[0, t]:
                     # print("episode: ", episode)
                     episode += 1
                     if "episode" in infos[0]:
                         visited_rooms = infos[0]["episode"]["visited_room"]
-                        logger.log_episode(episode, episode_ext_reward, visited_rooms)
+                        logger.log_episode(iteration, episode, episode_ext_reward, visited_rooms)
                     episode_ext_reward = 0
 
 
@@ -242,8 +245,8 @@ def noisy_tv(obs):
 if __name__ == '__main__':
     #delete_files()
     config = get_params()
-    config["algo"] = "RND-MC"
-    config["total_rollouts"] = 10
+    config["algo"] = "RND"
+    config["total_rollouts"] = 50
     config["verbose"] = True
     config["record"] = True
     config["per"] = "default"
