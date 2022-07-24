@@ -125,7 +125,6 @@ class ReplayMemory():
         return weights
 
     def compute_delta(self, data):
-
         encoded_target_features = self.rnd_target(data)
         encoded_predictor_features = self.rnd_predictor(data, 1)
         loss = (encoded_predictor_features - encoded_target_features).pow(2).mean(-1)

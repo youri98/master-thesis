@@ -253,7 +253,7 @@ def noisy_tv(obs):
 if __name__ == '__main__':
     config = get_params()
     config["algo"] = "RND"
-    config["total_rollouts"] = 500
+    config["total_rollouts"] = 20
     config["verbose"] = True
     config["record"] = True
     config["per"] = "default"

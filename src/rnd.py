@@ -67,8 +67,8 @@ class RND:
             self.predictor_model.to(self.device)
             self.current_policy.to(self.device)
 
-
-        self.optimizer = Adam(list(self.current_policy.parameters()) + list(self.predictor_model.parameters()), lr=self.config["lr"])
+        self.total_trainable_params = list(self.current_policy.parameters()) + list(self.predictor_model.parameters())
+        self.optimizer = Adam(self.total_trainable_params, lr=self.config["lr"])
 
         self.state_rms = RunningMeanStd(shape=self.obs_shape)
         self.int_reward_rms = RunningMeanStd(shape=(1,))
@@ -237,9 +237,9 @@ class RND:
     def optimize(self, loss):
         self.optimizer.zero_grad()
         loss.backward()
-        clip_grad_norm_(self.optimizer.parameters)
+        clip_grad_norm_(self.total_trainable_params)
         # torch.nn.utils.clip_grad_norm_(self.total_trainable_params, 0.5)
-        optimizer.step()
+        self.optimizer.step()
 
     def get_gae(self, rewards, values, next_values, dones, gamma):
         lam = self.config["lambda"]  # Make code faster.
