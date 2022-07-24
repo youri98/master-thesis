@@ -2,6 +2,7 @@ from heapq import heapify, heappush, heappushpop, nlargest
 import numpy as np
 import torch
 from operator import itemgetter
+import time
 
 class Experience:
     def __init__(self, priority, weight, data):
@@ -58,8 +59,11 @@ class ReplayMemory():
 
     def compute_rnd_loss(self, n):
         loss = 0.0
+        heapify(self.heap)
 
+        print(len(self.heap))
         k = int(np.ceil(n / self.n_parallel_env))
+
 
         for _ in range(k):
             priorities, weights, data = map(list, zip(*self.heap))
@@ -72,7 +76,7 @@ class ReplayMemory():
             states = np.array([d[1][7] for d in data])[sample_idx]
 
 
-            
+
             delta = self.compute_delta(torch.Tensor(states).to(self.device))
 
 
@@ -83,8 +87,7 @@ class ReplayMemory():
             loss += (delta * weights[sample_idx]).mean()
 
             for i in sample_idx:
-                self.heap[i][0] = priorities[i]
-                self.heap[i][1] = weights[i].item()
+                self.heap[i][0: 2] = priorities[i], weights[i].item()
 
         return loss
         

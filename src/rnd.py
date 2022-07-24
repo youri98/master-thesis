@@ -33,7 +33,9 @@ class RND:
         self.device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
         self.obs_shape = self.config["obs_shape"]
         self.state_shape = self.config["state_shape"]
-        self.memory_capacity = 128*56*2
+        self.memory_capacity = 2048
+
+        self.memory = Memory(self.memory_capacity)
 
 
         self.current_policy = PolicyModel(self.config["state_shape"], self.config["n_actions"]).to(self.device)
@@ -51,7 +53,7 @@ class RND:
         for param in self.target_model.parameters():
             param.requires_grad = False
 
-        self.memory = ReplayMemory(rnd_target=self.target_model, rnd_predictor=self.predictor_model, max_capacity=self.memory_capacity, n_parallel_env=self.config["n_workers"])
+        # self.memory = ReplayMemory(rnd_target=self.target_model, rnd_predictor=self.predictor_model, max_capacity=self.memory_capacity, n_parallel_env=self.config["n_workers"])
 
 
         self.n_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0 
@@ -139,23 +141,13 @@ class RND:
             yield states[idx], actions[idx], int_returns[idx], ext_returns[idx], advs[idx], \
                   log_probs[idx], next_states[idx]
 
-    def sample(self):
-        experiences, idxs, is_weights = self.memory.sample(self.mini_batch_size)
-        return experiences, idxs, is_weights
+
 
     # def learn(self, experiences, idxs, is_weights, batch_size=BATCH_SIZE, gamma=GAMMA):
     #     states, actions, int_rewards, ext_rewards, dones, int_values, ext_values, log_probs, next_int_values, next_ext_values, total_next_obs = experiences
 
 
 
-    def add_to_memory(self, states, actions, int_rewards,
-              ext_rewards, dones, int_values, ext_values, total_next_obs):
-
-        
-
-        for i in np.arange(len(states)):
-            self.memory.add(int_rewards[i], (states[i], actions[i], int_rewards[i], ext_rewards[i], dones[i], int_values[i], ext_values[i],
-                                    total_next_obs[i]))
 
     # @mean_of_list
     def train(self, states, actions, int_rewards,
@@ -186,7 +178,7 @@ class RND:
         pg_losses, ext_v_losses, int_v_losses, rnd_losses, entropies = [], [], [], [], []
 
         for experience in zip(states, actions, np.concatenate(int_rewards), np.concatenate(ext_rewards), np.concatenate(dones), int_values, ext_values, total_next_obs):
-            self.memory.add(experience)
+            self.memory.add(experience[1], experience[7])
 
 
         for epoch in range(self.config["n_epochs"]):
@@ -221,9 +213,23 @@ class RND:
                 ext_v_losses.append(ext_value_loss.item())
                 int_v_losses.append(int_value_loss.item())
                 entropies.append(entropy.item())
-                
 
-                rnd_loss = self.memory.compute_rnd_loss(self.mini_batch_size)
+                if self.config['per'] != "default":
+                    state, idxs, is_weight = self.memory.sample(self.mini_batch_size)
+
+                    minibatch = torch.Tensor(state).to(self.device)
+                    error = self.calculate_rnd_loss(minibatch)
+
+                    for idx, err in zip(idxs, error.detach().cpu().numpy().tolist()):
+                        self.memory.update(idx, err)
+
+                    rnd_loss = error * torch.Tensor(is_weight)
+                    rnd_loss = rnd_loss.mean()
+
+                
+                else:
+                    rnd_loss = self.calculate_rnd_loss(next_state).mean()
+
                 total_loss = policy_loss + rnd_loss
 
                 self.optimize(total_loss)
