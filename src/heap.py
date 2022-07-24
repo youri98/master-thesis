@@ -10,7 +10,7 @@ class Experience:
         self.data = data
 
 class ReplayMemory():
-    def __init__(self, rnd_target=None, rnd_predictor=None, max_capacity=1024, mode="proportional"):
+    def __init__(self, rnd_target=None, rnd_predictor=None, max_capacity=1024, mode="proportional", n_parallel_env=8):
         self.heap = []
         self.max_capacity = max_capacity
         self.rnd_predictor = rnd_predictor
@@ -23,6 +23,8 @@ class ReplayMemory():
         self.max_w = 1
         self.max_p = 1
         self.idx = 0
+        self.n_parallel_env = n_parallel_env
+
         self.device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
         heapify(self.heap)
@@ -56,15 +58,14 @@ class ReplayMemory():
 
     def compute_rnd_loss(self, n):
         loss = 0.0
-        n_parallel_env = 8
 
-        k = int(np.ceil(n / n_parallel_env))
+        k = int(np.ceil(n / self.n_parallel_env))
 
         for _ in range(k):
             priorities, weights, data = map(list, zip(*self.heap))
             self.max_w = max(weights)
 
-            sample_idx = self.prioritized_sampling(priorities, n_parallel_env)
+            sample_idx = self.prioritized_sampling(priorities, self.n_parallel_env)
 
             weights = self.compute_is(priorities)
             

@@ -5,8 +5,8 @@
 #SBATCH --error=slurm-%j.err
 #SBATCH --output=slurm-%j.out
 #SBATCH --time=72:00:00
-#SBATCH --gres=gpu:8
+#SBATCH --gres=gpu:4
 
 module load cuda10.2/toolkit/10.2.89
 
-python run_on_hpc.py --total_rollouts 30000 --record --algo RND-Bayes
+python run_on_hpc.py --total_rollouts 3000 --record --algo RND

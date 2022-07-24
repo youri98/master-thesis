@@ -51,7 +51,7 @@ class RND:
         for param in self.target_model.parameters():
             param.requires_grad = False
 
-        self.memory = ReplayMemory(rnd_target=self.target_model, rnd_predictor=self.predictor_model, max_capacity=self.memory_capacity)
+        self.memory = ReplayMemory(rnd_target=self.target_model, rnd_predictor=self.predictor_model, max_capacity=self.memory_capacity, n_parallel_env=self.config["n_workers"])
 
 
         self.n_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0 
