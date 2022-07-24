@@ -186,7 +186,15 @@ def train_model(config, add_noisy_tv=False, **kwargs):
                 _ = agent.get_actions_and_values(next_states, batch=True)
 
             total_int_rewards = agent.normalize_int_rewards(total_int_rewards)
-            
+
+            # agent.add_to_memory(states=concatenate(total_states),
+            #                 actions=total_actions,
+            #                 int_rewards=concatenate(total_int_rewards),
+            #                 ext_rewards=concatenate(total_ext_rewards),
+            #                 dones=concatenate(total_dones),
+            #                 int_values=concatenate(total_int_values),
+            #                 ext_values=concatenate(total_ext_values),
+            #                 total_next_obs=total_next_obs)
 
             training_logs = agent.train(states=concatenate(total_states),
                             actions=total_actions,
@@ -243,10 +251,9 @@ def noisy_tv(obs):
     return obs
 
 if __name__ == '__main__':
-    #delete_files()
     config = get_params()
     config["algo"] = "RND"
-    config["total_rollouts"] = 50
+    config["total_rollouts"] = 500
     config["verbose"] = True
     config["record"] = True
     config["per"] = "default"

@@ -35,8 +35,8 @@ class Logger:
 
         self.run_id = wandb.util.generate_id()
         wandb.init(project="RND", entity="youri",
-                   id=self.run_id, resume="allow")
-        wandb.config = self.config
+                   id=self.run_id, resume="allow", config=self.config)
+
 
         if self.config["mode"] == "train_from_scratch":
             self.create_model_folder()

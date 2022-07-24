@@ -20,6 +20,8 @@ from torch.utils.data import TensorDataset, DataLoader
 import sys
 
 from torch.distributions.categorical import Categorical
+from PrioritizedMemory import Memory
+from heap import ReplayMemory
 
 torch.backends.cudnn.benchmark = True
 gpu = True
@@ -31,6 +33,8 @@ class RND:
         self.device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
         self.obs_shape = self.config["obs_shape"]
         self.state_shape = self.config["state_shape"]
+        self.memory_capacity = 128*56*2
+
 
         self.current_policy = PolicyModel(self.config["state_shape"], self.config["n_actions"]).to(self.device)
         if self.config['algo'] == "RND":
@@ -47,6 +51,9 @@ class RND:
         for param in self.target_model.parameters():
             param.requires_grad = False
 
+        self.memory = ReplayMemory(rnd_target=self.target_model, rnd_predictor=self.predictor_model, max_capacity=self.memory_capacity)
+
+
         self.n_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0 
         device_ids = [x for x in range(self.n_gpus)]
 
@@ -61,8 +68,7 @@ class RND:
             self.current_policy.to(self.device)
 
 
-        self.total_trainable_params = list(self.current_policy.parameters()) + list(self.predictor_model.parameters())
-        self.optimizer = Adam(self.total_trainable_params, lr=self.config["lr"])
+        self.optimizer = Adam(list(self.current_policy.parameters()) + list(self.predictor_model.parameters()), lr=self.config["lr"])
 
         self.state_rms = RunningMeanStd(shape=self.obs_shape)
         self.int_reward_rms = RunningMeanStd(shape=(1,))
@@ -111,7 +117,7 @@ class RND:
         return action.cpu().numpy(), int_value.cpu().numpy().squeeze(), \
                ext_value.cpu().numpy().squeeze(), log_prob.cpu().numpy(), action_prob.cpu().numpy()
 
-    def choose_mini_batch(self, states, actions, int_returns, ext_returns, advs, log_probs, next_states):
+    def choose_mini_batch(self, states, actions, int_returns, ext_returns, advs, log_probs, next_states, uniform_sampling=False):
         states = torch.ByteTensor(states).to(self.device)
         next_states = torch.Tensor(next_states).to(self.device)
         actions = torch.ByteTensor(actions).to(self.device)
@@ -121,7 +127,7 @@ class RND:
         log_probs = torch.Tensor(log_probs).to(self.device)
 
 
-        if self.config['per'] == "default":
+        if self.config['per'] == "default" or uniform_sampling:
             fraction = 1 if self.config["n_workers"] <= 32 else 32 / self.config["n_workers"]
             indices = np.random.randint(0, len(states), (self.config["n_mini_batch"], int(np.ceil(self.mini_batch_size * fraction))))
         else:
@@ -132,6 +138,24 @@ class RND:
         for idx in indices:
             yield states[idx], actions[idx], int_returns[idx], ext_returns[idx], advs[idx], \
                   log_probs[idx], next_states[idx]
+
+    def sample(self):
+        experiences, idxs, is_weights = self.memory.sample(self.mini_batch_size)
+        return experiences, idxs, is_weights
+
+    # def learn(self, experiences, idxs, is_weights, batch_size=BATCH_SIZE, gamma=GAMMA):
+    #     states, actions, int_rewards, ext_rewards, dones, int_values, ext_values, log_probs, next_int_values, next_ext_values, total_next_obs = experiences
+
+
+
+    def add_to_memory(self, states, actions, int_rewards,
+              ext_rewards, dones, int_values, ext_values, total_next_obs):
+
+        
+
+        for i in np.arange(len(states)):
+            self.memory.add(int_rewards[i], (states[i], actions[i], int_rewards[i], ext_rewards[i], dones[i], int_values[i], ext_values[i],
+                                    total_next_obs[i]))
 
     # @mean_of_list
     def train(self, states, actions, int_rewards,
@@ -160,6 +184,11 @@ class RND:
         device_ids = [x for x in range(n_gpus)]
 
         pg_losses, ext_v_losses, int_v_losses, rnd_losses, entropies = [], [], [], [], []
+
+        for experience in zip(states, actions, np.concatenate(int_rewards), np.concatenate(ext_rewards), np.concatenate(dones), int_values, ext_values, total_next_obs):
+            self.memory.add(experience)
+
+
         for epoch in range(self.config["n_epochs"]):
             for state, action, int_return, ext_return, adv, old_log_prob, next_state in self.choose_mini_batch(states=states,
                                                                                                                actions=actions,
@@ -167,9 +196,9 @@ class RND:
                                                                                                                ext_returns=ext_rets,
                                                                                                                advs=advs,
                                                                                                                log_probs=log_probs,
-                                                                                                               next_states=total_next_obs):
-                #print("inside batch ", state.shape)
-                # torch.cuda.empty_cache() 
+                                                                                                               next_states=total_next_obs,
+                                                                                                               uniform_sampling=True):
+
 
                 outputs = self.current_policy(state)
                 int_value, ext_value, action_prob = outputs
@@ -183,27 +212,34 @@ class RND:
                 int_value_loss = self.mse_loss(int_value.squeeze(-1), int_return)
                 ext_value_loss = self.mse_loss(ext_value.squeeze(-1), ext_return)
 
-                critic_loss = 0.5 * (int_value_loss + ext_value_loss)
+                critic_loss = 0.5 * (int_value_loss + ext_value_loss) 
 
-                rnd_loss = self.calculate_rnd_loss(next_state)
+                policy_loss = critic_loss + pg_loss - self.config["ent_coeff"] * entropy
 
-                total_loss = critic_loss + pg_loss - self.config["ent_coeff"] * entropy + rnd_loss
-                self.optimize(total_loss)
 
                 pg_losses.append(pg_loss.item())
                 ext_v_losses.append(ext_value_loss.item())
                 int_v_losses.append(int_value_loss.item())
-                rnd_losses.append(rnd_loss.item())
                 entropies.append(entropy.item())
+                
+
+                rnd_loss = self.memory.compute_rnd_loss(self.mini_batch_size)
+                total_loss = policy_loss + rnd_loss
+
+                self.optimize(total_loss)
+
+                rnd_losses.append(rnd_loss.item())
+
+
                 # https://github.com/openai/random-network-distillation/blob/f75c0f1efa473d5109d487062fd8ed49ddce6634/ppo_agent.py#L187
         return np.array(pg_losses).mean(), np.array(ext_v_losses).mean(), np.array(int_v_losses).mean(), np.array(rnd_losses).mean(), np.array(entropies).mean(), np.mean(advs)
 
     def optimize(self, loss):
         self.optimizer.zero_grad()
         loss.backward()
-        clip_grad_norm_(self.total_trainable_params)
+        clip_grad_norm_(self.optimizer.parameters)
         # torch.nn.utils.clip_grad_norm_(self.total_trainable_params, 0.5)
-        self.optimizer.step()
+        optimizer.step()
 
     def get_gae(self, rewards, values, next_values, dones, gamma):
         lam = self.config["lambda"]  # Make code faster.
@@ -264,7 +300,9 @@ class RND:
         # mask = torch.rand(loss.size(), device=self.device)
         # mask = (mask < self.config["predictor_proportion"]).float()
         # loss = (mask * loss).sum() / torch.max(mask.sum(), torch.Tensor([1]).to(self.device))
-        loss = torch.mean(loss)
+
+
+        # loss = torch.mean(loss)
         return loss
 
     def set_from_checkpoint(self, checkpoint):
