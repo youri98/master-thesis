@@ -76,37 +76,36 @@ class Logger:
             recording = np.expand_dims(recording, 1)
             wandb.log({"video": wandb.Video(
                 np.array(recording), fps=fps, format='gif')}, step=iteration)
-        # self.scores["Recording"].append(recording.tolist())
+            # self.scores["Recording"].append(recording.tolist())
 
     def save_recording_local(self, iteration, recording, fps=60):
-        if self.config["record"]:
-            frame_size = (self.config["obs_shape"][2],
-                          self.config["obs_shape"][1])
+        frame_size = (self.config["obs_shape"][2],
+                        self.config["obs_shape"][1])
 
-            fourcc = cv2.VideoWriter_fourcc(*'theo')
-            # https://stackoverflow.com/questions/49530857/python-opencv-video-format-play-in-browser
+        fourcc = cv2.VideoWriter_fourcc(*'theo')
+        # https://stackoverflow.com/questions/49530857/python-opencv-video-format-play-in-browser
 
-            out = cv2.VideoWriter(
-                "Models/" + self.log_dir  + "/recording/" + str(iteration) + ".ogg", fourcc, fps, frame_size, 0)
+        out = cv2.VideoWriter(
+            "Models/" + self.log_dir  + "/recording/" + str(iteration) + ".ogg", fourcc, fps, frame_size, 0)
 
 
-            # with open("Models/" + self.log_dir  + "/recording/" + str(iteration) + ".txt", "w") as file:
+        # with open("Models/" + self.log_dir  + "/recording/" + str(iteration) + ".txt", "w") as file:
 
-                # file.write(recording)
+            # file.write(recording)
 
-            for image in recording:
-                #image = np.pad(image, ((height_pad, height_pad), (width_pad,width_pad)))
-                #image = np.mean(image, axis=0)
-                # image = np.rand(84,84,3)
-                # image = np.zeros(frame_size, dtype="uint8")
-                image = image.astype(np.uint8)
-                # image = np.expand_dims(image, axis=2)
-                # image = np.tile(image, (1, 1, 3))
-                # image = np.array(image)
+        for image in recording:
+            #image = np.pad(image, ((height_pad, height_pad), (width_pad,width_pad)))
+            #image = np.mean(image, axis=0)
+            # image = np.rand(84,84,3)
+            # image = np.zeros(frame_size, dtype="uint8")
+            image = image.astype(np.uint8)
+            # image = np.expand_dims(image, axis=2)
+            # image = np.tile(image, (1, 1, 3))
+            # image = np.array(image)
 
-                out.write(image)
+            out.write(image)
 
-            out.release()
+        out.release()
 
     def log_episode(self, *args):
         iteration, self.episode, self.episode_ext_reward, self.visited_rooms = args
@@ -187,7 +186,8 @@ class Logger:
             params["disc_optimizer"] = self.agent.disc_optimizer.state_dict()
 
         else:
-            params["optimizer_state_dict"] = self.agent.optimizer.state_dict(),
+            params["predictor_optimizer"] = self.agent.predictor_optimizer.state_dict(),
+            params["policy_optimizer"] = self.agent.policy_optimizer.state_dict()
 
 
         torch.save(params, "Models/" + self.log_dir + "/params.pth")

@@ -20,7 +20,7 @@ from torch.utils.data import TensorDataset, DataLoader
 import sys
 
 from torch.distributions.categorical import Categorical
-from PrioritizedMemory import Memory
+from PrioritizedMemory import Memory, PrioritizedReplay
 from heap import ReplayMemory
 
 torch.backends.cudnn.benchmark = True
@@ -35,7 +35,7 @@ class RND:
         self.state_shape = self.config["state_shape"]
         self.memory_capacity = 2048
 
-        self.memory = Memory(self.memory_capacity)
+        self.memory = PrioritizedReplay(self.memory_capacity)
 
 
         self.current_policy = PolicyModel(self.config["state_shape"], self.config["n_actions"]).to(self.device)
@@ -48,7 +48,11 @@ class RND:
         elif self.config['algo'] == "RND-K":
             self.predictor_model = KPredictorModel(self.obs_shape).to(self.device)
 
-        
+        self.predictor_model = PredictorModel(self.obs_shape).to(self.device)
+        self.predictor_tar_model = PredictorModel(self.obs_shape).to(self.device)
+        self.predictor_tar_model.load_state_dict(self.predictor_model.state_dict())
+
+
         self.target_model = TargetModel(self.obs_shape).to(self.device)
         for param in self.target_model.parameters():
             param.requires_grad = False
@@ -70,7 +74,10 @@ class RND:
             self.current_policy.to(self.device)
 
         self.total_trainable_params = list(self.current_policy.parameters()) + list(self.predictor_model.parameters())
-        self.optimizer = Adam(self.total_trainable_params, lr=self.config["lr"])
+        
+        self.predictor_optimizer = Adam(self.predictor_model.parameters(), lr=self.config["lr"])
+        self.predictor_tar_optimizer = Adam(self.predictor_tar_model.parameters(), lr=self.config["lr"])
+        self.policy_optimizer = Adam(self.current_policy.parameters(), lr=self.config["lr"])
 
         self.state_rms = RunningMeanStd(shape=self.obs_shape)
         self.int_reward_rms = RunningMeanStd(shape=(1,))
@@ -178,7 +185,8 @@ class RND:
         pg_losses, ext_v_losses, int_v_losses, rnd_losses, entropies = [], [], [], [], []
 
         for experience in zip(states, actions, np.concatenate(int_rewards), np.concatenate(ext_rewards), np.concatenate(dones), int_values, ext_values, total_next_obs):
-            self.memory.add(experience[1], experience[7])
+            # self.memory.add(experience[1], experience[7])
+            self.memory.push(experience[7])
 
 
         for epoch in range(self.config["n_epochs"]):
@@ -217,23 +225,43 @@ class RND:
                 if self.config['per'] != "default":
                     state, idxs, is_weight = self.memory.sample(self.mini_batch_size)
 
-                    minibatch = torch.Tensor(state).to(self.device)
+                    minibatch = torch.Tensor(np.array(state)).to(self.device)
                     error = self.calculate_rnd_loss(minibatch)
 
-                    for idx, err in zip(idxs, error.detach().cpu().numpy().tolist()):
-                        self.memory.update(idx, err)
+                    # for idx, err in zip(idxs, error.detach().cpu().numpy().tolist()):
+                    #     self.memory.update(idx, err)
 
                     rnd_loss = error * torch.Tensor(is_weight)
                     rnd_loss = rnd_loss.mean()
+
+
+                    
+
+
+
+                    self.memory.update_priorities(idxs, error.detach().cpu().numpy())
 
                 
                 else:
                     rnd_loss = self.calculate_rnd_loss(next_state).mean()
 
-                total_loss = policy_loss + rnd_loss
 
-                self.optimize(total_loss)
 
+                # update policy
+                self.policy_optimizer.zero_grad()
+                policy_loss.backward()
+                clip_grad_norm_(self.current_policy.parameters())
+                # torch.nn.utils.clip_grad_norm_(self.total_trainable_params, 0.5)
+                self.policy_optimizer.step()
+
+                # update predictor
+                self.predictor_optimizer.zero_grad()
+                rnd_loss.backward()
+                clip_grad_norm_(self.predictor_model.parameters())
+                # torch.nn.utils.clip_grad_norm_(self.total_trainable_params, 0.5)
+                self.predictor_optimizer.step()
+
+                
                 rnd_losses.append(rnd_loss.item())
 
 

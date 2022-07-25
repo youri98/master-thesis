@@ -100,8 +100,8 @@ def train_model(config, add_noisy_tv=False, **kwargs):
         init_int_rewards = np.zeros(rollout_base_shape)
         init_ext_rewards = np.zeros(rollout_base_shape)
         init_dones = np.zeros(rollout_base_shape, dtype=bool)
-        init_int_values = np.zeros(rollout_base_shape)
-        init_ext_values = np.zeros(rollout_base_shape)
+        init_int_values = np.zeros(rollout_base_shape, dtype=float)
+        init_ext_values = np.zeros(rollout_base_shape, dtype=float)
         init_log_probs = np.zeros(rollout_base_shape)
         init_next_states = np.zeros((rollout_base_shape[0],) + config["state_shape"], dtype=np.uint8)
         init_next_obs = np.zeros(rollout_base_shape + config["obs_shape"], dtype=np.uint8)
@@ -166,6 +166,8 @@ def train_model(config, add_noisy_tv=False, **kwargs):
                     if "episode" in infos[0]:
                         visited_rooms = infos[0]["episode"]["visited_room"]
                         logger.log_episode(iteration, episode, episode_ext_reward, visited_rooms)
+                        if episode_ext_reward != 0:
+                            print(episode_ext_reward)
                     episode_ext_reward = 0
 
 
@@ -175,10 +177,8 @@ def train_model(config, add_noisy_tv=False, **kwargs):
             total_actions = np.concatenate(total_actions)
             total_next_states = np.concatenate(total_next_states)
 
-            if config["algo"] == "APE":
-                total_int_rewards = agent.calculate_int_rewards(total_next_obs, total_actions) # + total actions for APE
-            else:
-                total_int_rewards = agent.calculate_int_rewards(total_next_obs)
+
+            total_int_rewards = agent.calculate_int_rewards(total_next_obs)
 
             recording_int_rewards = total_int_rewards[0, ...]
 
@@ -221,14 +221,16 @@ def train_model(config, add_noisy_tv=False, **kwargs):
                                     )
             
             recording = np.stack(recording)
-            logger.log_recording(iteration, recording)
+
             # np.save(f"frame{iteration}.npy" , recording[23])
 
             # wandb.log({"image": wandb.Image(recording[23])}, step=iteration)
+            if config["record"]:
+                logger.log_recording(iteration, recording)
+                logger.save_recording_local(iteration, recording)
 
             logger.time_stop("logging time")
             logger.time_start()
-            logger.save_recording_local(iteration, recording)
 
             if iteration % config["interval"] == 0 or iteration == config["total_rollouts"]:
                 logger.save_params(episode, iteration)
@@ -253,7 +255,7 @@ def noisy_tv(obs):
 if __name__ == '__main__':
     config = get_params()
     config["algo"] = "RND"
-    config["total_rollouts"] = 1000
+    config["total_rollouts"] = 2000
     config["verbose"] = True
     config["record"] = True
     config["per"] = "proportional"
