@@ -1,6 +1,6 @@
 # credit to https://github.com/gribeiro2004/Continuous-control-with-DDPG-and-prioritized-experience-replay/tree/main/Code
 
-import numpy
+import numpy as np
 
 # SumTree
 # a binary tree data structure where the parent’s value is the sum of its children
@@ -9,9 +9,17 @@ class SumTree:
 
     def __init__(self, capacity):
         self.capacity = capacity
-        self.tree = numpy.zeros(2 * capacity - 1)
-        self.data = numpy.zeros(capacity, dtype=object)
+        self.tree = np.zeros(2 * capacity - 1)
+        self.data = np.zeros(capacity, dtype=object)
         self.n_entries = 0
+
+    def getMax(self):
+        p_max = np.max(self.tree)
+        
+        if p_max == 0:
+            p_max = 1
+
+        return p_max
 
     # update to the root node
     def _propagate(self, idx, change):

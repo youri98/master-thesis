@@ -33,9 +33,10 @@ class RND:
         self.device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
         self.obs_shape = self.config["obs_shape"]
         self.state_shape = self.config["state_shape"]
-        self.memory_capacity = 2048
+        self.memory_capacity = self.config["n_workers"] * self.config["rollout_length"] * 4
 
         self.memory = PrioritizedReplay(self.memory_capacity)
+        # self.memory = Memory(self.memory_capacity)
 
 
         self.current_policy = PolicyModel(self.config["state_shape"], self.config["n_actions"]).to(self.device)

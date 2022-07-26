@@ -18,9 +18,11 @@ class Memory:  # stored as ( s, a, r, s_ ) in SumTree
     def _get_priority(self, error):
         return (np.abs(error) + self.e) ** self.a
 
-    def add(self, error, sample):
-        p = self._get_priority(error)
-        self.tree.add(p, sample)
+    def push(self, *args):
+        # p = self._get_priority(error)
+
+        p_max = self.tree.getMax()
+        self.tree.add(p_max, args)
 
     def sample(self, n):
         batch = []
@@ -49,9 +51,10 @@ class Memory:  # stored as ( s, a, r, s_ ) in SumTree
         return batch, idxs, is_weight
 
     
-    def update(self, idx, error):
-        p = self._get_priority(error)
-        self.tree.update(idx, p)
+    def update_priorities(self, batch_indices, batch_errors):
+        for idx, error in zip(batch_indices, batch_errors):
+            p = self._get_priority(error)
+            self.tree.update(idx, p)
 
 
 class PrioritizedReplay(object):
