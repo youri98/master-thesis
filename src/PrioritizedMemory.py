@@ -21,7 +21,11 @@ class Memory:  # stored as ( s, a, r, s_ ) in SumTree
     def push(self, *args):
         # p = self._get_priority(error)
 
-        p_max = self.tree.getMax()
+        p_max = np.max(self.tree.tree[self.capacity -1 :])
+
+        if p_max == 0:
+            p_max = 1
+
         self.tree.add(p_max, args)
 
     def sample(self, n):
@@ -48,7 +52,7 @@ class Memory:  # stored as ( s, a, r, s_ ) in SumTree
         
         is_weight /= is_weight.max()
 
-        return batch, idxs, is_weight
+        return [b[0] for b in batch], idxs, is_weight
 
     
     def update_priorities(self, batch_indices, batch_errors):
