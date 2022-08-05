@@ -87,28 +87,28 @@ class RND:
 
         self.priority_alpha = 0.65
         
-    def prioritized_sampling(self, values, epsilon=0.01):
-        if self.config["per"] == "rankbased":
+    # def prioritized_sampling(self, values, epsilon=0.01):
+    #     if self.config["per"] == "rankbased":
 
-            priorities = [1/i for i in range(1, len(values) + 1)]
-            priority_sum = np.sum(np.power(priorities, self.priority_alpha))
-            priorities = np.power(priorities, self.priority_alpha) / priority_sum
-            indices = np.flip(np.argsort(values.cpu().numpy()))
+    #         priorities = [1/i for i in range(1, len(values) + 1)]
+    #         priority_sum = np.sum(np.power(priorities, self.priority_alpha))
+    #         priorities = np.power(priorities, self.priority_alpha) / priority_sum
+    #         indices = np.flip(np.argsort(values.cpu().numpy()))
 
-        elif self.config["per"] == "proportional":
+    #     elif self.config["per"]:
 
-            priorities = [np.abs(v) + epsilon for v in values.cpu().numpy()]
-            priority_sum = np.sum(np.power(priorities, self.priority_alpha))
-            priorities = np.power(priorities, self.priority_alpha) / priority_sum
-            indices = range(0, len(values))
-        else:
-            raise ValueError
+    #         priorities = [np.abs(v) + epsilon for v in values.cpu().numpy()]
+    #         priority_sum = np.sum(np.power(priorities, self.priority_alpha))
+    #         priorities = np.power(priorities, self.priority_alpha) / priority_sum
+    #         indices = range(0, len(values))
+    #     else:
+    #         raise ValueError
 
-        fraction = 1 if self.config["n_workers"] <= 32 else 32 / self.config["n_workers"]
+    #     fraction = 1 if self.config["n_workers"] <= 32 else 32 / self.config["n_workers"]
 
-        sampled_indices = np.random.choice(indices, size=(self.config["n_mini_batch"], int(np.ceil(self.mini_batch_size * fraction))), p=priorities, replace=True)
+    #     sampled_indices = np.random.choice(indices, size=(self.config["n_mini_batch"], int(np.ceil(self.mini_batch_size * fraction))), p=priorities, replace=True)
         
-        return sampled_indices
+    #     return sampled_indices
 
     def get_actions_and_values(self, state, batch=False):
         if not batch:
@@ -137,11 +137,10 @@ class RND:
         log_probs = torch.Tensor(log_probs).to(self.device)
 
 
-        if self.config['per'] == "default" or uniform_sampling:
+        if not self.config['per'] or uniform_sampling:
             fraction = 1 if self.config["n_workers"] <= 32 else 32 / self.config["n_workers"]
             indices = np.random.randint(0, len(states), (self.config["n_mini_batch"], int(np.ceil(self.mini_batch_size * fraction))))
-        else:
-            indices = self.prioritized_sampling(advs)
+
 
 
 
@@ -223,7 +222,7 @@ class RND:
                 int_v_losses.append(int_value_loss.item())
                 entropies.append(entropy.item())
 
-                if self.config['per'] != "default":
+                if self.config['per']:
                     state, idxs, is_weight = self.memory.sample(self.mini_batch_size)
 
                     minibatch = torch.Tensor(np.array(state)).to(self.device)
@@ -234,11 +233,6 @@ class RND:
 
                     rnd_loss = error * torch.Tensor(is_weight)
                     rnd_loss = rnd_loss.mean()
-
-
-                    
-
-
 
                     self.memory.update_priorities(idxs, error.detach().cpu().numpy())
 

@@ -5,17 +5,22 @@ import gym
 from copy import deepcopy
 import shutil
 import torch
-
-def conv_shape(input_dims, kernel_size, stride, padding=0):
-    return ((input_dims[0] + 2 * padding - kernel_size) // stride + 1,
-            (input_dims[1] + 2 * padding - kernel_size) // stride + 1)
-
 import numpy as np
 import cv2
 import gym
 from copy import deepcopy
 import torch
 from torch._six import inf
+from config import get_params
+
+config = get_params()
+
+def conv_shape(input_dims, kernel_size, stride, padding=0):
+    return ((input_dims[0] + 2 * padding - kernel_size) // stride + 1,
+            (input_dims[1] + 2 * padding - kernel_size) // stride + 1)
+
+
+
 
 
 def mean_of_list(func):
@@ -28,8 +33,9 @@ def mean_of_list(func):
 
 
 def preprocessing(img):
+    size = config["obs_shape"][1:]
     img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-    img = cv2.resize(img, (84, 84), interpolation=cv2.INTER_AREA)
+    img = cv2.resize(img, size, interpolation=cv2.INTER_AREA)
     return img
 
 

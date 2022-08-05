@@ -17,7 +17,8 @@ def get_params():
     parser.add_argument("--verbose", default=False, action="store_true")
     parser.add_argument("--model_name", help="name of model to resume training or to test")
     parser.add_argument("--multiple_gpus", default=False, action="store_true", help="whether the run is on multiple gpus")
-    parser.add_argument("--per", default="default", choices=["default", "rankbased", "proportional"], help="whether to use Prioritized Experience Replay")
+    parser.add_argument("--per", default=False, action="store_true", help="whether to use Prioritized Experience Replay")
+    parser.add_argument("--res", default=(84,84), nargs='+', type=int, help="tuple 2D of resolution")
 
     # parser.add_argument("--do_test", action="store_true",
     #                     help="The flag determines whether to train the agent or play with it.")
@@ -27,6 +28,8 @@ def get_params():
     #                     help="The flag determines whether to train from scratch or continue previous tries.")
 
     parser_params = parser.parse_args()
+    parser_params = vars(parser_params)
+    resolution = tuple(parser_params["res"])
 
     """ 
      Parameters based on the "Exploration By Random Network Distillation" paper.
@@ -34,9 +37,8 @@ def get_params():
     """
     # MontezumaRevengeNoFrameskip-v4
     # region default parameters
+
     default_params = {
-                      "state_shape": (4, 84, 84),
-                      "obs_shape": (1, 84, 84),
                       "max_frames_per_episode": 4500,  # 4500 * 4 = 18K :D
                       "rollout_length": 128,
                       "n_epochs": 4,
@@ -52,6 +54,9 @@ def get_params():
                       "pre_normalization_steps": 5,
                       }
 
+
+    default_params.update({"state_shape": (4, *resolution), "obs_shape": (1, *resolution)})
+
     # endregion
-    total_params = {**vars(parser_params), **default_params}
+    total_params = {**parser_params, **default_params}
     return total_params

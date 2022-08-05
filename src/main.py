@@ -254,11 +254,6 @@ def noisy_tv(obs):
 
 if __name__ == '__main__':
     config = get_params()
-    config["algo"] = "RND"
-    config["total_rollouts"] = 2000
-    config["verbose"] = True
-    config["record"] = True
-    config["per"] = "proportional"
 
     # # run 1
     # config["env"] = "VentureNoFrameskip-v4"
