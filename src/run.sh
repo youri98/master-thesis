@@ -9,4 +9,4 @@
 
 module load cuda10.2/toolkit/10.2.89
 
-python run_on_hpc.py --total_rollouts 30000 --record --algo RND --res 40 40
+python run_on_hpc.py --total_rollouts 30000 --record --algo RND --res 40 40 --mem_size 4
