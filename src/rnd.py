@@ -22,6 +22,7 @@ import sys
 from torch.distributions.categorical import Categorical
 from PrioritizedMemory import Memory, PrioritizedReplay
 from heap import ReplayMemory
+import time
 
 torch.backends.cudnn.benchmark = True
 gpu = True
@@ -186,9 +187,11 @@ class RND:
 
         pg_losses, ext_v_losses, int_v_losses, rnd_losses, entropies = [], [], [], [], []
 
-        for experience in zip(states, actions, np.concatenate(int_rewards), np.concatenate(ext_rewards), np.concatenate(dones), int_values, ext_values, total_next_obs):
-            # self.memory.add(experience[1], experience[7])
-            self.memory.push(experience[7])
+        if self.config["per"]:
+            for experience in zip(states, actions, np.concatenate(int_rewards), np.concatenate(ext_rewards), np.concatenate(dones), int_values, ext_values, total_next_obs):
+                # self.memory.add(experience[1], experience[7])
+                self.memory.push(experience[7])
+    
 
 
         for epoch in range(self.config["n_epochs"]):
@@ -233,7 +236,7 @@ class RND:
                     # for idx, err in zip(idxs, error.detach().cpu().numpy().tolist()):
                     #     self.memory.update(idx, err)
 
-                    rnd_loss = error * torch.Tensor(is_weight)
+                    rnd_loss = error * torch.Tensor(is_weight).to(self.device)
                     rnd_loss = rnd_loss.mean()
 
                     self.memory.update_priorities(idxs, error.detach().cpu().numpy())

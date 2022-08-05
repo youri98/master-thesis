@@ -65,7 +65,7 @@ class PrioritizedReplay(object):
     """
     Proportional Prioritization
     """
-    def __init__(self, capacity, alpha=0.6,beta_start = 0.4,beta_frames=100000):
+    def __init__(self, capacity, alpha=0.6, beta_start = 0.4, beta_frames=100000):
         self.alpha = alpha
         self.beta_start = beta_start
         self.beta_frames = beta_frames
@@ -127,7 +127,7 @@ class PrioritizedReplay(object):
         weights /= weights.max() 
         weights  = np.array(weights, dtype=np.float32) 
 
-        samples = np.array([s[0] for s in samples])
+        samples = np.array([s[0] for s in samples], dtype=np.float32)
         
         return samples, indices, weights
     

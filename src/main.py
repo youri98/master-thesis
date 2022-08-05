@@ -261,6 +261,7 @@ if __name__ == '__main__':
     # config["algo"] = "RND"
     # config["verbose"] = True
     config["interval"] = 100
+    config["per"] = True
 
     train_model(config, add_noisy_tv=False)
     wandb.finish()
