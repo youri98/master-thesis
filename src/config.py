@@ -19,7 +19,7 @@ def get_params():
     parser.add_argument("--multiple_gpus", default=False, action="store_true", help="whether the run is on multiple gpus")
     parser.add_argument("--per", default=False, action="store_true", help="whether to use Prioritized Experience Replay")
     parser.add_argument("--res", default=(84,84), nargs='+', type=int, help="tuple 2D of resolution")
-    parser.add_argument("--mem_size", default=4, type=int, help="relative size of memory")
+    parser.add_argument("--mem_size", default=1, type=int, help="relative size of memory")
 
     # parser.add_argument("--do_test", action="store_true",
     #                     help="The flag determines whether to train the agent or play with it.")

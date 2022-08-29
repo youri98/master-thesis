@@ -259,9 +259,10 @@ if __name__ == '__main__':
     # config["env"] = "VentureNoFrameskip-v4"
     # config["total_rollouts"] = int(7)
     # config["algo"] = "RND"
-    # config["verbose"] = True
+    config["verbose"] = True
     config["interval"] = 100
-    config["per"] = True
+    config["per"] = False
+    config["mem_size"] = 2
 
     train_model(config, add_noisy_tv=False)
     wandb.finish()

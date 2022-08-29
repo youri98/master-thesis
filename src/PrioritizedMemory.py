@@ -137,3 +137,18 @@ class PrioritizedReplay(object):
 
     def __len__(self):
         return len(self.buffer)
+
+class DefaultMemory(object):
+    def __init__(self, capacity, batch_size, state_shape):
+        self.i = 0
+        self.batch_size = batch_size
+        self.memory_length = self.batch_size * capacity
+        self.memory = np.zeros((self.memory_length, *state_shape), dtype=np.float32)
+
+    def sample(self, mini_batch_size):
+        indices = np.random.randint(0, len(self.memory), size=mini_batch_size)
+        return self.memory[indices]
+
+    def push_batch(self, *args):
+        self.memory[self.i: self.i + self.batch_size] = args
+        self.i = np.mod(self.i + self.batch_size, self.memory_length)

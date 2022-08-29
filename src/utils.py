@@ -230,3 +230,9 @@ def clip_grad_norm_(parameters, norm_type: float = 2.0):
         total_norm = torch.norm(torch.stack([torch.norm(p.grad.detach(), norm_type).to(device) for p in parameters]),
                                 norm_type)
     return total_norm
+
+
+def filter_state(states, device, fraction=0.6):
+    mask = torch.rand(states.shape, device=device) > fraction
+    selection = states * mask
+    return selection

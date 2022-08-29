@@ -20,7 +20,7 @@ from torch.utils.data import TensorDataset, DataLoader
 import sys
 
 from torch.distributions.categorical import Categorical
-from PrioritizedMemory import Memory, PrioritizedReplay
+from PrioritizedMemory import PrioritizedReplay, DefaultMemory
 from heap import ReplayMemory
 import time
 
@@ -39,6 +39,12 @@ class RND:
         if self.config["per"]:
             self.memory_capacity = self.config["n_workers"] * self.config["rollout_length"] * self.config["mem_size"]
             self.memory = PrioritizedReplay(self.memory_capacity)
+        else:    
+            self.memory = DefaultMemory(self.config["mem_size"], self.config["n_workers"] * self.config["rollout_length"], self.config["obs_shape"])
+
+
+
+        
         # self.memory = Memory(self.memory_capacity)
 
 
@@ -243,6 +249,9 @@ class RND:
 
                 
                 else:
+                    state = self.memory.sample(self.mini_batch_size)
+                    minibatch = torch.Tensor(np.array(state)).to(self.device)
+                    
                     rnd_loss = self.calculate_rnd_loss(next_state).mean()
 
 
