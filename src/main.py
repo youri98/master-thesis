@@ -13,8 +13,6 @@ import multiprocessing
 import os
 
 
-gpu = True
-
 torch.autograd.set_detect_anomaly(True)
 
 
@@ -28,7 +26,12 @@ def train_model(config, add_noisy_tv=False, **kwargs):
             os.environ["WANDB_API_KEY"] = personal_key.read().strip()
 
     temp_env = gym.make(config["env"])
-    config.update({"n_actions": temp_env.action_space.n})
+
+    if "Continuous" not in config["env"]:
+        config.update({"n_actions": temp_env.action_space.n})
+    else:
+        config.update({"n_actions": 1})
+
     temp_env.close()
     config["n_workers"] = multiprocessing.cpu_count() #* torch.cuda.device_count() if torch.cuda.is_available() else multiprocessing.cpu_count()
     config.update({"batch_size": (config["rollout_length"] * config["n_workers"]) // config["n_mini_batch"]})
@@ -94,18 +97,36 @@ def train_model(config, add_noisy_tv=False, **kwargs):
 
         rollout_base_shape = config["n_workers"], config["rollout_length"]
 
-        init_states = np.zeros(rollout_base_shape + config["state_shape"], dtype=np.uint8)
-        init_actions = np.zeros(rollout_base_shape, dtype=np.uint8)
-        init_action_probs = np.zeros(rollout_base_shape + (config["n_actions"],))
+
+        if "Continuous" in config["env"]:
+            init_actions = np.zeros(rollout_base_shape + (config["n_actions"],), dtype=np.float32)
+            init_action_probs = np.zeros(rollout_base_shape)
+        else:
+            init_actions = np.zeros(rollout_base_shape, dtype=np.uint8)
+            init_action_probs = np.zeros(rollout_base_shape + (config["n_actions"],))
+
         init_int_rewards = np.zeros(rollout_base_shape)
         init_ext_rewards = np.zeros(rollout_base_shape)
         init_dones = np.zeros(rollout_base_shape, dtype=bool)
         init_int_values = np.zeros(rollout_base_shape, dtype=float)
         init_ext_values = np.zeros(rollout_base_shape, dtype=float)
         init_log_probs = np.zeros(rollout_base_shape)
-        init_next_states = np.zeros((rollout_base_shape[0],) + config["state_shape"], dtype=np.uint8)
-        init_next_obs = np.zeros(rollout_base_shape + config["obs_shape"], dtype=np.uint8)
+        init_completion_time = np.zeros(rollout_base_shape, dtype=np.int16)
+
+        if "MountainCar" in config["env"]:
+            init_next_states = np.zeros((rollout_base_shape[0],) + config["state_shape"], dtype=np.float32)
+            init_next_obs = np.zeros(rollout_base_shape + config["obs_shape"], dtype=np.float32)
+            init_states = np.zeros(rollout_base_shape + config["state_shape"], dtype=np.float32)
+        else:
+            init_next_states = np.zeros((rollout_base_shape[0],) + config["state_shape"], dtype=np.uint8)
+            init_next_obs = np.zeros(rollout_base_shape + config["obs_shape"], dtype=np.uint8)
+            init_states = np.zeros(rollout_base_shape + config["state_shape"], dtype=np.uint8)
+
         recording = []
+        
+        cum_hits = 0 
+        cum_ext_reward = 0
+        cum_dones = 0
 
         for iteration in tqdm(range(init_iteration, config["total_rollouts"] + 1), disable=not config["verbose"]):
 
@@ -120,12 +141,15 @@ def train_model(config, add_noisy_tv=False, **kwargs):
             total_log_probs =init_log_probs
             next_states = init_next_states
             total_next_obs = init_next_obs
-            total_next_states = np.zeros(rollout_base_shape + config["obs_shape"], dtype=np.uint8)
+            total_completion_time = init_completion_time
             # print("iteration how many frames", total_states.shape)
 
             logger.time_start()
+            hits = 0
+
 
             for t in range(config["rollout_length"]):
+
 
                 for worker_id, parent in enumerate(parents):
                     total_states[worker_id, t] = parent.recv()
@@ -136,10 +160,19 @@ def train_model(config, add_noisy_tv=False, **kwargs):
                     parent.send(a)
 
                 infos = []
-                for worker_id, parent in enumerate(parents):
+                for worker_id, parent in enumerate(parents): 
                     s_, r, d, info = parent.recv()
 
+                    if r !=0:
+                        hits += 1
+                        cum_hits += 1
+                        cum_ext_reward += r
 
+                    if "MountainCar" in config["env"]:
+                        total_completion_time[worker_id, t] = info["completion_time"] 
+
+
+                        
                     infos.append(info)
                     total_ext_rewards[worker_id, t] = r
                     total_dones[worker_id, t] = d
@@ -159,26 +192,32 @@ def train_model(config, add_noisy_tv=False, **kwargs):
                 
                 # if any(np.ravel(total_dones)):
                 #     print("heee")
-                
-                if total_dones[0, t]:
-                    # print("episode: ", episode)
-                    episode += 1
-                    if "episode" in infos[0]:
-                        visited_rooms = infos[0]["episode"]["visited_room"]
-                        logger.log_episode(iteration, episode, episode_ext_reward, visited_rooms)
-                        if episode_ext_reward != 0:
-                            print(episode_ext_reward)
-                    episode_ext_reward = 0
+
+
+                if "MountainCar" not in config["env"]:
+                    if total_dones[0, t]:
+                        # print("episode: ", episode)
+                        episode += 1
+                        if "episode" in infos[0]:
+
+                            visited_rooms = infos[0]["episode"]["visited_room"]
+                            logger.log_episode(iteration, episode, episode_ext_reward, visited_rooms)
+                            if episode_ext_reward != 0:
+                                print(episode_ext_reward)
+                        episode_ext_reward = 0
+                 
+
 
 
             logger.time_stop("env step time")
             logger.time_start()
             total_next_obs = np.concatenate(total_next_obs)
             total_actions = np.concatenate(total_actions)
-            total_next_states = np.concatenate(total_next_states)
 
 
-            total_int_rewards = agent.calculate_int_rewards(total_next_obs)
+            if not config["discard_intrinsic_reward"]:
+                total_int_rewards = agent.calculate_int_rewards(total_next_obs)
+
 
             recording_int_rewards = total_int_rewards[0, ...]
 
@@ -211,18 +250,38 @@ def train_model(config, add_noisy_tv=False, **kwargs):
             logger.time_stop("training time")
             n_frames = total_states.shape[0] * total_states.shape[1] * total_states.shape[2] * (iteration + 1)
             logger.time_start()
+
+            if config["per-v2"]:
+                age_percentage, _ = agent.memory.get_priority_age()
+
+
             logger.log_iteration(iteration,
-                                    n_frames,
-                                    training_logs,
-                                    total_int_rewards[0].mean(),
-                                    total_ext_rewards[0].mean(),
-                                    total_action_probs[0].max(-1).mean(),
-                                    recording_int_rewards.mean(),
-                                    )
+                                        n_frames,
+                                        training_logs,
+                                        total_int_rewards.mean(),
+                                        total_ext_rewards.mean(),
+                                        total_action_probs.max(-1).mean(),
+                                        recording_int_rewards.mean(),
+                                        age_percentage
+                                        )
+
+            if "MountainCar" in config["env"]:
+                cum_dones += concatenate(total_dones).sum()
+
+                mean_completion_time = np.true_divide(concatenate(total_completion_time).sum(),(concatenate(total_completion_time)!=0).sum())
+
+                logger.log_mountaincar_states(iteration,
+                                        concatenate(total_states), concatenate(total_dones).sum(), hits, cum_hits, cum_ext_reward, cum_dones, mean_completion_time)
+            
+                
+
             
             recording = np.stack(recording)
 
             # np.save(f"frame{iteration}.npy" , recording[23])
+
+
+            
 
             # wandb.log({"image": wandb.Image(recording[23])}, step=iteration)
             if config["record"]:
@@ -234,7 +293,7 @@ def train_model(config, add_noisy_tv=False, **kwargs):
 
             if iteration % config["interval"] == 0 or iteration == config["total_rollouts"]:
                 logger.save_params(episode, iteration)
-                logger.save_score_to_json()
+                # logger.save_score_to_json()
                 logger.time_stop()
 
             logger.time_stop("param saving time")
@@ -252,17 +311,22 @@ def noisy_tv(obs):
 
     return obs
 
+
 if __name__ == '__main__':
     config = get_params()
-
     # # run 1
-    # config["env"] = "VentureNoFrameskip-v4"
+    # config["env"] = ""
+
+    # config["env"] = "MountainCar-v0"
+    # config.update({"state_shape": (2,), "obs_shape": (2,)})
     # config["total_rollouts"] = int(7)
     # config["algo"] = "RND"
+    config["total_rollouts"] = 1000
     config["verbose"] = True
-    config["interval"] = 100
-    config["per"] = False
-    config["mem_size"] = 2
+    config["per-v2"] = True
+    config["mem_size"] = 4
+    config["discard_intrinsic_reward"] = False
+    config["max_frames_per_episode"] = 2000
 
     train_model(config, add_noisy_tv=False)
     wandb.finish()

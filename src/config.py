@@ -6,7 +6,7 @@ def get_params():
         description="Variable parameters based on the configuration of the machine or user's choice")
 
     parser.add_argument("--n_workers", default=2, type=int, help="Number of parallel environments.")
-    parser.add_argument("--interval", default=100, type=int,
+    parser.add_argument("--interval", default=10000, type=int,
                         help="The interval specifies how often different parameters should be saved and printed,"
                              " counted by iterations.")
     parser.add_argument("--algo", default="RND", help="Use RND or APE", choices=["RND", "RND-Bayes", "RND-MC", "RND-K"])
@@ -20,6 +20,7 @@ def get_params():
     parser.add_argument("--per", default=False, action="store_true", help="whether to use Prioritized Experience Replay")
     parser.add_argument("--res", default=(84,84), nargs='+', type=int, help="tuple 2D of resolution")
     parser.add_argument("--mem_size", default=1, type=int, help="relative size of memory")
+    parser.add_argument("--discard_intrinsic_reward", default=False, action="store_true", help="Discard intrinsic reward and only use extrinsic reward")
 
     # parser.add_argument("--do_test", action="store_true",
     #                     help="The flag determines whether to train the agent or play with it.")

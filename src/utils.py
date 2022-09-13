@@ -13,6 +13,15 @@ import torch
 from torch._six import inf
 from config import get_params
 
+
+from ale_py import ALEInterface
+from ale_py.roms import SpaceInvaders, KingKong, MontezumaRevenge
+
+
+
+
+
+
 config = get_params()
 
 def conv_shape(input_dims, kernel_size, stride, padding=0):
@@ -39,8 +48,11 @@ def preprocessing(img):
     return img
 
 
-def stack_states(stacked_frames, state, is_new_episode):
-    frame = preprocessing(state)
+def stack_states(stacked_frames, state, is_new_episode, preprocess=True):
+    if preprocess:
+        frame = preprocessing(state)
+    else:
+        frame = state
 
     if is_new_episode:
         stacked_frames = np.stack([frame for _ in range(4)], axis=0)
@@ -70,16 +82,21 @@ def explained_variance(ypred, y):
     return np.nan if vary == 0 else 1 - np.var(y - ypred) / vary
 
 
-def make_atari(env_id, max_episode_steps, sticky_action=True, max_and_skip=True):
+def make_atari(env_id, max_episode_steps, sticky_action=True, max_and_skip=True, montezuma_visited_room=True, add_random_state_to_info=True):
+    
     env = gym.make(env_id)
+    # ale = ALEInterface()
+    # ale.loadROM(MontezumaRevenge)
+
     env._max_episode_steps = max_episode_steps * 4
-    assert 'NoFrameskip' in env.spec.id
     if sticky_action:
         env = StickyActionEnv(env)
     if max_and_skip:
         env = RepeatActionEnv(env)
-    env = MontezumaVisitedRoomEnv(env, 3)
-    env = AddRandomStateToInfoEnv(env)
+    if montezuma_visited_room:
+        env = MontezumaVisitedRoomEnv(env, 3)
+    if add_random_state_to_info:
+        env = AddRandomStateToInfoEnv(env)
 
     return env
 
@@ -88,6 +105,7 @@ class StickyActionEnv(gym.Wrapper):
     def __init__(self, env, p=0.25):
         super(StickyActionEnv, self).__init__(env)
         self.p = p
+
         self.last_action = 0
 
     def step(self, action):
@@ -134,9 +152,11 @@ class MontezumaVisitedRoomEnv(gym.Wrapper):
 
     def step(self, action):
         state, reward, done, info = self.env.step(action)
+
         ram = self.unwrapped.ale.getRAM()
         assert len(ram) == 128
         self.visited_rooms.add(ram[self.room_address])
+
         if done:
             if "episode" not in info:
                 info["episode"] = {}

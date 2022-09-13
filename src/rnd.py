@@ -34,11 +34,15 @@ class RND:
         self.device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
         self.obs_shape = self.config["obs_shape"]
         self.state_shape = self.config["state_shape"]
+        self.continuous = "Continuous" in self.config["env"]
 
 
         if self.config["per"]:
             self.memory_capacity = self.config["n_workers"] * self.config["rollout_length"] * self.config["mem_size"]
-            self.memory = PrioritizedReplay(self.memory_capacity)
+            self.memory = PrioritizedReplay(self.memory_capacity, self.config["obs_shape"])
+        elif self.config["per-v2"]:
+            self.memory_capacity = self.config["n_workers"] * self.config["rollout_length"] * self.config["mem_size"]
+            self.memory = PrioritizedReplay(self.memory_capacity, self.config["obs_shape"])
         else:    
             self.memory = DefaultMemory(self.config["mem_size"], self.config["n_workers"] * self.config["rollout_length"], self.config["obs_shape"])
 
@@ -47,21 +51,23 @@ class RND:
         
         # self.memory = Memory(self.memory_capacity)
 
+        if "MountainCar" in self.config["env"]:
+            from toy_models import PredictorModel, PolicyModel, TargetModel
+        else:
+            from rnd_models import PredictorModel, PolicyModel, TargetModel
+
 
         self.current_policy = PolicyModel(self.config["state_shape"], self.config["n_actions"]).to(self.device)
-        if self.config['algo'] == "RND":
-            self.predictor_model = PredictorModel(self.obs_shape).to(self.device)
-        elif self.config['algo'] == "RND-Bayes":
-            self.predictor_model = BayesianPredictorModel(self.obs_shape).to(self.device)
-        elif self.config['algo'] == "RND-MC":
-            self.predictor_model = PredictorModel(self.obs_shape, mcdropout=0.1).to(self.device)
-        elif self.config['algo'] == "RND-K":
-            self.predictor_model = KPredictorModel(self.obs_shape).to(self.device)
+        # if self.config['algo'] == "RND":
+        #     self.predictor_model = PredictorModel(self.obs_shape).to(self.device)
+        # elif self.config['algo'] == "RND-Bayes":
+        #     self.predictor_model = BayesianPredictorModel(self.obs_shape).to(self.device)
+        # elif self.config['algo'] == "RND-MC":
+        #     self.predictor_model = PredictorModel(self.obs_shape, mcdropout=0.1).to(self.device)
+        # elif self.config['algo'] == "RND-K":
+        #     self.predictor_model = KPredictorModel(self.obs_shape).to(self.device)
 
         self.predictor_model = PredictorModel(self.obs_shape).to(self.device)
-        self.predictor_tar_model = PredictorModel(self.obs_shape).to(self.device)
-        self.predictor_tar_model.load_state_dict(self.predictor_model.state_dict())
-
 
         self.target_model = TargetModel(self.obs_shape).to(self.device)
         for param in self.target_model.parameters():
@@ -69,9 +75,6 @@ class RND:
 
         # self.memory = ReplayMemory(rnd_target=self.target_model, rnd_predictor=self.predictor_model, max_capacity=self.memory_capacity, n_parallel_env=self.config["n_workers"])
 
-
-        self.n_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0 
-        device_ids = [x for x in range(self.n_gpus)]
 
         if torch.cuda.device_count() > 1 or True:
             print("Let's use", torch.cuda.device_count(), "GPUs!")
@@ -86,7 +89,6 @@ class RND:
         self.total_trainable_params = list(self.current_policy.parameters()) + list(self.predictor_model.parameters())
         
         self.predictor_optimizer = Adam(self.predictor_model.parameters(), lr=self.config["lr"])
-        self.predictor_tar_optimizer = Adam(self.predictor_tar_model.parameters(), lr=self.config["lr"])
         self.policy_optimizer = Adam(self.current_policy.parameters(), lr=self.config["lr"])
 
         self.state_rms = RunningMeanStd(shape=self.obs_shape)
@@ -94,7 +96,7 @@ class RND:
 
         self.mse_loss = torch.nn.MSELoss()
 
-        self.priority_alpha = 0.65
+        # self.priority_alpha = 0.65
         
     # def prioritized_sampling(self, values, epsilon=0.01):
     #     if self.config["per"] == "rankbased":
@@ -129,9 +131,17 @@ class RND:
         with torch.no_grad():
             outputs = self.current_policy(state)
             int_value, ext_value, action_prob = outputs
-            dist = Categorical(action_prob)
-            action = dist.sample()
-            log_prob = dist.log_prob(action)
+
+            if not self.continuous:
+                dist = Categorical(action_prob)
+                action = dist.sample()
+                log_prob = dist.log_prob(action)
+            else:
+                action = action_prob
+                action_prob, log_prob = torch.zeros(8,1), torch.zeros(8)
+                int_value = torch.squeeze(int_value)
+                ext_value = torch.squeeze(ext_value)
+                action_prob = torch.squeeze(action_prob)
 
         return action.cpu().numpy(), int_value.cpu().numpy().squeeze(), \
                ext_value.cpu().numpy().squeeze(), log_prob.cpu().numpy(), action_prob.cpu().numpy()
@@ -194,9 +204,13 @@ class RND:
         pg_losses, ext_v_losses, int_v_losses, rnd_losses, entropies = [], [], [], [], []
 
         if self.config["per"]:
+
+
             for experience in zip(states, actions, np.concatenate(int_rewards), np.concatenate(ext_rewards), np.concatenate(dones), int_values, ext_values, total_next_obs):
                 # self.memory.add(experience[1], experience[7])
                 self.memory.push(experience[7])
+        elif self.config["per-v2"]:
+            self.memory.push_batch(total_next_obs)
     
 
 
@@ -233,10 +247,14 @@ class RND:
                 int_v_losses.append(int_value_loss.item())
                 entropies.append(entropy.item())
 
-                if self.config['per']:
+                if self.config['per'] or self.config['per-v2']:
                     state, idxs, is_weight = self.memory.sample(self.mini_batch_size)
 
                     minibatch = torch.Tensor(np.array(state)).to(self.device)
+
+                    if self.config["per-v2"]:
+                        minibatch = torch.unsqueeze(minibatch, dim=1)
+
                     error = self.calculate_rnd_loss(minibatch)
 
                     # for idx, err in zip(idxs, error.detach().cpu().numpy().tolist()):
@@ -306,7 +324,7 @@ class RND:
         next_states = np.clip((next_states - self.state_rms.mean) / (self.state_rms.var ** 0.5), -5, 5,
                               dtype="float32")  # dtype to avoid '.float()' call for pytorch.
         next_states = from_numpy(next_states).to(self.device)
-        predictor_encoded_features = self.predictor_model(next_states, 5)
+        predictor_encoded_features = self.predictor_model(next_states)
         target_encoded_features = self.target_model(next_states)
 
         int_reward = (predictor_encoded_features - target_encoded_features).pow(2).mean(1)
@@ -338,7 +356,7 @@ class RND:
 
     def calculate_rnd_loss(self, next_state):
         encoded_target_features = self.target_model(next_state)
-        encoded_predictor_features = self.predictor_model(next_state, 1)
+        encoded_predictor_features = self.predictor_model(next_state)
         loss = (encoded_predictor_features - encoded_target_features).pow(2).mean(-1)
         # mask = torch.rand(loss.size(), device=self.device)
         # mask = (mask < self.config["predictor_proportion"]).float()

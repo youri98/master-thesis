@@ -1,79 +1,83 @@
 # credit to https://github.com/gribeiro2004/Continuous-control-with-DDPG-and-prioritized-experience-replay/tree/main/Code
 
 import argparse
+import binascii
 import random
 import numpy as np
 from SumTree import SumTree
+from operator import itemgetter
 
-class Memory:  # stored as ( s, a, r, s_ ) in SumTree
-    e = 0.01 
-    a = 0.6
-    beta = 0.4
-    beta_increment_per_sampling = 0.00001
+# class Memory:  # stored as ( s, a, r, s_ ) in SumTree
+#     e = 0.01 
+#     a = 0.6
+#     beta = 0.4
+#     beta_increment_per_sampling = 0.00001
 
-    def __init__(self, capacity):
-        self.tree = SumTree(capacity)
-        self.capacity = capacity
+#     def __init__(self, capacity):
+#         self.tree = SumTree(capacity)
+#         self.capacity = capacity
 
-    def _get_priority(self, error):
-        return (np.abs(error) + self.e) ** self.a
+#     def _get_priority(self, error):
+#         return (np.abs(error) + self.e) ** self.a
 
-    def push(self, *args):
-        # p = self._get_priority(error)
+#     def push(self, *args):
+#         # p = self._get_priority(error)
 
-        p_max = np.max(self.tree.tree[self.capacity -1 :])
+#         p_max = np.max(self.tree.tree[self.capacity -1 :])
 
-        if p_max == 0:
-            p_max = 1
+#         if p_max == 0:
+#             p_max = 1
 
-        self.tree.add(p_max, args)
+#         self.tree.add(p_max, args)
 
-    def sample(self, n):
-        batch = []
-        idxs = []
-        segment = self.tree.total() / n
-        priorities = []
+#     def sample(self, n):
+#         batch = []
+#         idxs = []
+#         segment = self.tree.total() / n
+#         priorities = []
 
-        self.beta = np.min([1., self.beta + self.beta_increment_per_sampling])
+#         self.beta = np.min([1., self.beta + self.beta_increment_per_sampling])
 
-        for i in range(n):
-            a = segment * i
-            b = segment * (i + 1)
+#         for i in range(n):
+#             a = segment * i
+#             b = segment * (i + 1)
 
-            s = random.uniform(a, b)
-            (idx, p, data) = self.tree.get(s)
-            priorities.append(p)
-            batch.append(data)
-            idxs.append(idx)
+#             s = random.uniform(a, b)
+#             (idx, p, data) = self.tree.get(s)
+#             priorities.append(p)
+#             batch.append(data)
+#             idxs.append(idx)
 
-        sampling_probabilities = priorities / self.tree.total()
+#         sampling_probabilities = priorities / self.tree.total()
         
-        is_weight = np.power(self.tree.n_entries * sampling_probabilities, -self.beta)
+#         is_weight = np.power(self.tree.n_entries * sampling_probabilities, -self.beta)
         
-        is_weight /= is_weight.max()
+#         is_weight /= is_weight.max()
 
-        return [b[0] for b in batch], idxs, is_weight
+#         return [b[0] for b in batch], idxs, is_weight
 
     
-    def update_priorities(self, batch_indices, batch_errors):
-        for idx, error in zip(batch_indices, batch_errors):
-            p = self._get_priority(error)
-            self.tree.update(idx, p)
+#     def update_priorities(self, batch_indices, batch_errors):
+#         for idx, error in zip(batch_indices, batch_errors):
+#             p = self._get_priority(error)
+#             self.tree.update(idx, p)
 
 
 class PrioritizedReplay(object):
     """
     Proportional Prioritization
     """
-    def __init__(self, capacity, alpha=0.6, beta_start = 0.4, beta_frames=100000):
+    def __init__(self, capacity, state_shape, alpha=0.6, beta_start = 0.4, beta_frames=100000):
         self.alpha = alpha
         self.beta_start = beta_start
         self.beta_frames = beta_frames
         self.frame = 1 #for beta calculation
         self.capacity   = capacity
-        self.buffer     = []
+        self.buffer     = np.zeros((capacity, *state_shape), dtype=np.float64)
         self.pos        = 0
         self.priorities = np.zeros((capacity,), dtype=np.float32)
+        self.priority_age = np.zeros((capacity,), dtype=np.uint8)
+        self.max_prio = 1.0
     
     def beta_by_frame(self, frame_idx):
         """
@@ -103,6 +107,39 @@ class PrioritizedReplay(object):
         self.priorities[self.pos] = max_prio
         self.pos = (self.pos + 1) % self.capacity # lets the pos circle in the ranges of capacity if pos+1 > cap --> new posi = 0
     
+    def push_batch(self, states):
+
+        # sort
+        if self.pos >= self.capacity:
+            temp = list(zip(self.buffer, self.priorities, self.priority_age))
+            temp.sort(key=itemgetter(1))
+
+            for i in range(len(temp)):
+                self.buffer[i], self.priorities[i], self.priority_age[i] = temp[i]
+
+
+            self.buffer[:len(states)] = states
+            self.priorities[:len(states)] = self.max_prio
+            self.priority_age[:len(states)] = 1
+            self.priority_age[len(states):] += 1
+        else:
+            self.buffer[self.pos:self.pos + len(states)] = states
+            self.priority_age[:min(self.pos + len(states), len(self.priority_age))] += 1
+            self.priorities[:len(self.buffer)] = self.max_prio
+            self.pos += len(states)
+
+        self.max_prio = self.priorities.max() # gives max priority if buffer is not empty else 1
+
+    def get_priority_age(self):
+        bins = [0, 1, 2, 3, 4, 6, 8, 10, 15, 20, 30, 50, 100]
+        
+        
+        counts, age = np.histogram(self.priority_age, bins=bins)
+        percentage = counts / len(self.priority_age)
+
+        return (age, counts), self.priority_age
+
+
     def sample(self, batch_size):
         N = len(self.buffer)
         if N == self.capacity:
@@ -130,7 +167,10 @@ class PrioritizedReplay(object):
         samples = np.array([s[0] for s in samples], dtype=np.float32)
         
         return samples, indices, weights
-    
+
+    def get_time(self):
+        self.priority_age    
+
     def update_priorities(self, batch_indices, batch_priorities):
         for idx, prio in zip(batch_indices, batch_priorities):
             self.priorities[idx] = abs(prio) 

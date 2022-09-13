@@ -125,11 +125,8 @@ class Logger:
             file.write(json.dumps(norm_scores))
 
     def log_iteration(self, *args):
-        if self.config["algo"] == 'APE':
-            iteration, n_frames, (pg_losses, ext_value_losses, int_value_losses, rnd_losses,
-                        disc_losses, entropies, advs, disc_l1_losses, gen_l1_losses), int_reward, ext_reward, action_prob, recording_int_rewards = args
-        else:
-            iteration, n_frames, (pg_losses, ext_value_losses, int_value_losses, rnd_losses, entropies, advs), int_reward, ext_reward, action_prob, recording_int_rewards = args
+
+        iteration, n_frames, (pg_losses, ext_value_losses, int_value_losses, rnd_losses, entropies, advs), int_reward, ext_reward, action_prob, recording_int_rewards, age_percentage = args
         # self.running_act_prob = self.exp_avg(self.running_act_prob, action_prob)
         # self.running_int_reward = self.exp_avg(self.running_int_reward, int_reward)
         # self.running_training_logs = self.exp_avg(self.running_training_logs, np.array(training_logs))
@@ -151,14 +148,12 @@ class Logger:
         }
 
 
+        for age, percentage in zip(*age_percentage):
+            wandb.log({f"{age}" : percentage}, step=iteration)
+
         params["RND Loss"] = rnd_losses
 
 
-        self.scores['Iteration'].append(iteration)
-        for k, v in params.items():
-            # if isinstance(v, torch.Tensor):
-            #     v = v.item()
-            self.scores[k].append(v)
 
         params.update(self.timer)
         wandb.log(params, step=iteration)
@@ -202,3 +197,10 @@ class Logger:
             checkpoint = torch.load(model_dir[-1] + "/params.pth")
             self.log_dir = model_dir[-1].split(os.sep)[-1]
         return checkpoint
+
+
+    def log_mountaincar_states(self, iteration, state, dones, hits, cum_hits, cum_ext_reward, cum_dones, mean_completion_time):
+
+        x, v = np.hsplit(state, 2)
+        x, v = x.flatten(), v.flatten()
+        wandb.log({"position":x, "velocity":v, "dones": dones, "hits" : hits, "cumulative hits":cum_hits, "cumulative extrinisic reward": cum_ext_reward, "cumulative dones": cum_dones, "completion time":mean_completion_time}, step=iteration)
