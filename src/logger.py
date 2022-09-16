@@ -147,9 +147,9 @@ class Logger:
             # "Extrinsic Explained variance": self.running_training_logs[6],
         }
 
-
-        for age, percentage in zip(*age_percentage):
-            wandb.log({f"{age}" : percentage}, step=iteration)
+        if age_percentage:
+            for age, percentage in zip(*age_percentage):
+                wandb.log({f"{age}" : percentage}, step=iteration)
 
         params["RND Loss"] = rnd_losses
 

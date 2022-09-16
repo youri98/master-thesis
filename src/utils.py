@@ -43,6 +43,8 @@ def mean_of_list(func):
 
 def preprocessing(img):
     size = config["obs_shape"][1:]
+    if not isinstance(img, np.ndarray):
+        img = img[0]
     img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
     img = cv2.resize(img, size, interpolation=cv2.INTER_AREA)
     return img
@@ -87,6 +89,8 @@ def make_atari(env_id, max_episode_steps, sticky_action=True, max_and_skip=True,
     env = gym.make(env_id)
     # ale = ALEInterface()
     # ale.loadROM(MontezumaRevenge)
+    # temp3 = help(ale)
+
 
     env._max_episode_steps = max_episode_steps * 4
     if sticky_action:
@@ -131,7 +135,9 @@ class RepeatActionEnv(gym.Wrapper):
     def step(self, action):
         reward, done = 0, False
         for t in range(4):
-            state, r, done, info = self.env.step(action)
+            state, r, done, _, info = self.env.step(action)
+
+
             if t == 2:
                 self.successive_frame[0] = state
             elif t == 3:

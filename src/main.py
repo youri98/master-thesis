@@ -202,8 +202,8 @@ def train_model(config, add_noisy_tv=False, **kwargs):
 
                             visited_rooms = infos[0]["episode"]["visited_room"]
                             logger.log_episode(iteration, episode, episode_ext_reward, visited_rooms)
-                            if episode_ext_reward != 0:
-                                print(episode_ext_reward)
+                            # if episode_ext_reward != 0:
+                            #     print(episode_ext_reward)
                         episode_ext_reward = 0
                  
 
@@ -253,6 +253,8 @@ def train_model(config, add_noisy_tv=False, **kwargs):
 
             if config["per-v2"]:
                 age_percentage, _ = agent.memory.get_priority_age()
+            else:
+                age_percentage = None
 
 
             logger.log_iteration(iteration,
@@ -286,7 +288,7 @@ def train_model(config, add_noisy_tv=False, **kwargs):
             # wandb.log({"image": wandb.Image(recording[23])}, step=iteration)
             if config["record"]:
                 logger.log_recording(iteration, recording)
-                logger.save_recording_local(iteration, recording)
+                # logger.save_recording_local(iteration, recording)
 
             logger.time_stop("logging time")
             logger.time_start()
@@ -315,18 +317,19 @@ def noisy_tv(obs):
 if __name__ == '__main__':
     config = get_params()
     # # run 1
-    # config["env"] = ""
+    config["env"] = "ALE/DonkeyKong-v5"
 
     # config["env"] = "MountainCar-v0"
     # config.update({"state_shape": (2,), "obs_shape": (2,)})
     # config["total_rollouts"] = int(7)
     # config["algo"] = "RND"
-    config["total_rollouts"] = 1000
+    config["total_rollouts"] = 5000
     config["verbose"] = True
-    config["per-v2"] = True
-    config["mem_size"] = 4
+    config["per-v2"] = False
+    config["mem_size"] = 1
     config["discard_intrinsic_reward"] = False
-    config["max_frames_per_episode"] = 2000
+    # config["max_frames_per_episode"] = 2000
+    config["record"] = True
 
     train_model(config, add_noisy_tv=False)
     wandb.finish()
