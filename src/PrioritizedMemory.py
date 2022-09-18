@@ -90,22 +90,18 @@ class PrioritizedReplay(object):
         """
         return min(1.0, self.beta_start + frame_idx * (1.0 - self.beta_start) / self.beta_frames)
     
-    def push(self, *args):
+    def push_per_batch(self, states):
         # assert state.ndim == next_state.ndim
         # state      = np.expand_dims(state, 0)
         # next_state = np.expand_dims(next_state, 0)
         
         # max_prio = self.priorities.max() if self.buffer else 1.0 # gives max priority if buffer is not empty else 1
         
-        if len(self.buffer) < self.capacity:
-            self.buffer.append((args))
-        else:
-            # puts the new data on the position of the oldes since it circles via pos variable
-            # since if len(buffer) == capacity -> pos == 0 -> oldest memory (at least for the first round?) 
-            self.buffer[self.pos] = (args)
+
+        self.buffer[self.pos: self.pos + len(states)] = states
         
         self.priorities[self.pos] = self.max_prio
-        self.pos = (self.pos + 1) % self.capacity # lets the pos circle in the ranges of capacity if pos+1 > cap --> new posi = 0
+        self.pos = (self.pos + len(states)) % self.capacity # lets the pos circle in the ranges of capacity if pos+1 > cap --> new posi = 0
         self.max_prio = self.priorities.max()
     
     def push_batch(self, states):

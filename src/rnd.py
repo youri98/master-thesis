@@ -204,11 +204,7 @@ class RND:
         pg_losses, ext_v_losses, int_v_losses, rnd_losses, entropies = [], [], [], [], []
 
         if self.config["per"]:
-
-
-            for experience in zip(states, actions, np.concatenate(int_rewards), np.concatenate(ext_rewards), np.concatenate(dones), int_values, ext_values, total_next_obs):
-                # self.memory.add(experience[1], experience[7])
-                self.memory.push(experience[7])
+            self.memory.push_per_batch(total_next_obs)
         elif self.config["per-v2"]:
             self.memory.push_batch(total_next_obs)
     
