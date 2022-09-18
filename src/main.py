@@ -251,7 +251,7 @@ def train_model(config, add_noisy_tv=False, **kwargs):
             n_frames = total_states.shape[0] * total_states.shape[1] * total_states.shape[2] * (iteration + 1)
             logger.time_start()
 
-            if config["per-v2"]:
+            if config["sampling_algo"] == "per-v2":
                 age_percentage, _ = agent.memory.get_priority_age()
             else:
                 age_percentage = None
@@ -325,7 +325,7 @@ if __name__ == '__main__':
     # config["algo"] = "RND"
     config["total_rollouts"] = 5000
     config["verbose"] = True
-    config["per-v2"] = False
+    config["sampling_algo"] = "uniform"
     config["mem_size"] = 1
     config["discard_intrinsic_reward"] = False
     # config["max_frames_per_episode"] = 2000

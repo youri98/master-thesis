@@ -156,9 +156,8 @@ class RND:
         log_probs = torch.Tensor(log_probs).to(self.device)
 
 
-        if not self.config['per'] or uniform_sampling:
-            fraction = 1 if self.config["n_workers"] <= 32 else 32 / self.config["n_workers"]
-            indices = np.random.randint(0, len(states), (self.config["n_mini_batch"], int(np.ceil(self.mini_batch_size * fraction))))
+        fraction = 1 if self.config["n_workers"] <= 32 else 32 / self.config["n_workers"]
+        indices = np.random.randint(0, len(states), (self.config["n_mini_batch"], int(np.ceil(self.mini_batch_size * fraction))))
 
 
 
@@ -203,9 +202,9 @@ class RND:
 
         pg_losses, ext_v_losses, int_v_losses, rnd_losses, entropies = [], [], [], [], []
 
-        if self.config["per"]:
+        if self.config["sampling_algo"] == "per":
             self.memory.push_per_batch(total_next_obs)
-        elif self.config["per-v2"]:
+        elif self.config["sampling_algo"] == "per-v2":
             self.memory.push_batch(total_next_obs)
     
 
@@ -243,12 +242,12 @@ class RND:
                 int_v_losses.append(int_value_loss.item())
                 entropies.append(entropy.item())
 
-                if self.config['per'] or self.config['per-v2']:
+                if self.config['sampling_algo'] in ["per", "per-v2"]:
                     state, idxs, is_weight = self.memory.sample(self.mini_batch_size)
 
                     minibatch = torch.Tensor(np.array(state)).to(self.device)
 
-                    if self.config["per-v2"]:
+                    if self.config['sampling_algo'] == "per-v2":
                         minibatch = torch.unsqueeze(minibatch, dim=1)
 
                     error = self.calculate_rnd_loss(minibatch)
