@@ -247,8 +247,7 @@ class RND:
 
                     minibatch = torch.Tensor(np.array(state)).to(self.device)
 
-                    if self.config['sampling_algo'] == "per-v2":
-                        minibatch = torch.unsqueeze(minibatch, dim=1)
+                    minibatch = torch.unsqueeze(minibatch, dim=1)
 
                     error = self.calculate_rnd_loss(minibatch)
 
