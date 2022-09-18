@@ -37,10 +37,10 @@ class RND:
         self.continuous = "Continuous" in self.config["env"]
 
 
-        if self.config["per"]:
+        if self.config["sampling_algo"] == "per":
             self.memory_capacity = self.config["n_workers"] * self.config["rollout_length"] * self.config["mem_size"]
             self.memory = PrioritizedReplay(self.memory_capacity, self.config["obs_shape"])
-        elif self.config["per-v2"]:
+        elif self.config["sampling_algo"] == "per-v2":
             self.memory_capacity = self.config["n_workers"] * self.config["rollout_length"] * self.config["mem_size"]
             self.memory = PrioritizedReplay(self.memory_capacity, self.config["obs_shape"])
         else:    
