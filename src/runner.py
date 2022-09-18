@@ -53,6 +53,8 @@ class Worker:
                     r = 0
                     info["completion_time"] = 0
 
+            if "DonkeyKong" in self.config["env"] and r == 100:
+                r = 0
 
             if self.config["render"]:
                 self.render()
