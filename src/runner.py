@@ -65,8 +65,8 @@ class Worker:
             else:
                 self._stacked_states = stack_states(self._stacked_states, next_state, False)
                 
-            conn.send((self._stacked_states, r, d, info))
-            # conn.send((self._stacked_states, np.sign(r), d, info))
+            # conn.send((self._stacked_states, r, d, info))
+            conn.send((self._stacked_states, np.sign(r), d, info))
 
             if d:
                 self.reset()
