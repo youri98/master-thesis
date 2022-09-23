@@ -104,7 +104,7 @@ class PrioritizedReplay(object):
         self.pos = (self.pos + len(states)) % self.capacity # lets the pos circle in the ranges of capacity if pos+1 > cap --> new posi = 0
         self.max_prio = self.priorities.max()
     
-    def push_batch(self, states):
+    def push_per2_batch(self, states):
 
         # sort
         if self.pos >= self.capacity:
@@ -119,6 +119,33 @@ class PrioritizedReplay(object):
             self.priorities[:len(states)] = self.max_prio
             self.priority_age[:len(states)] = 1
             self.priority_age[len(states):] += 1
+        else:
+            self.buffer[self.pos:self.pos + len(states)] = states
+            self.priority_age[:min(self.pos + len(states), len(self.priority_age))] += 1
+            self.priorities[:len(self.buffer)] = self.max_prio
+            self.pos += len(states)
+
+        self.max_prio = self.priorities.max() # gives max priority if buffer is not empty else 1
+    
+    def push_per3_batch(self, states, errors):
+
+        # sort
+        if self.pos >= self.capacity:
+            appended_buffer = np.concatenate([self.buffer, states])
+            appended_priorities = np.concatenate([self.priorities, np.full(len(states), self.max_prio)])
+            appended_priority_age = np.concatenate([self.priority_age, np.zeros(len(states))])
+
+
+
+            temp = list(zip(appended_buffer, appended_priorities, appended_priority_age))
+            temp.sort(key=itemgetter(1))
+
+            temp = temp[len(states):]
+
+            for i in range(len(temp)):
+                self.buffer[i], self.priorities[i], self.priority_age[i] = temp[i]
+
+            self.priority_age[:] += 1
         else:
             self.buffer[self.pos:self.pos + len(states)] = states
             self.priority_age[:min(self.pos + len(states), len(self.priority_age))] += 1

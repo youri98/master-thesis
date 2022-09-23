@@ -37,10 +37,7 @@ class RND:
         self.continuous = "Continuous" in self.config["env"]
 
 
-        if self.config["sampling_algo"] == "per":
-            self.memory_capacity = self.config["n_workers"] * self.config["rollout_length"] * self.config["mem_size"]
-            self.memory = PrioritizedReplay(self.memory_capacity, self.config["obs_shape"])
-        elif self.config["sampling_algo"] == "per-v2":
+        if self.config["sampling_algo"] in ["per", "per-v2", "per-v3"]:
             self.memory_capacity = self.config["n_workers"] * self.config["rollout_length"] * self.config["mem_size"]
             self.memory = PrioritizedReplay(self.memory_capacity, self.config["obs_shape"])
         else:    
@@ -77,7 +74,7 @@ class RND:
 
 
         if torch.cuda.device_count() > 1 or True:
-            print("Let's use", torch.cuda.device_count(), "GPUs!")
+            print( "GPUs: ", torch.cuda.device_count())
     
             self.predictor_model = DataParallel(self.predictor_model)
             self.current_policy = DataParallel(self.current_policy)
@@ -96,30 +93,7 @@ class RND:
 
         self.mse_loss = torch.nn.MSELoss()
 
-        # self.priority_alpha = 0.65
-        
-    # def prioritized_sampling(self, values, epsilon=0.01):
-    #     if self.config["per"] == "rankbased":
 
-    #         priorities = [1/i for i in range(1, len(values) + 1)]
-    #         priority_sum = np.sum(np.power(priorities, self.priority_alpha))
-    #         priorities = np.power(priorities, self.priority_alpha) / priority_sum
-    #         indices = np.flip(np.argsort(values.cpu().numpy()))
-
-    #     elif self.config["per"]:
-
-    #         priorities = [np.abs(v) + epsilon for v in values.cpu().numpy()]
-    #         priority_sum = np.sum(np.power(priorities, self.priority_alpha))
-    #         priorities = np.power(priorities, self.priority_alpha) / priority_sum
-    #         indices = range(0, len(values))
-    #     else:
-    #         raise ValueError
-
-    #     fraction = 1 if self.config["n_workers"] <= 32 else 32 / self.config["n_workers"]
-
-    #     sampled_indices = np.random.choice(indices, size=(self.config["n_mini_batch"], int(np.ceil(self.mini_batch_size * fraction))), p=priorities, replace=True)
-        
-    #     return sampled_indices
 
     def get_actions_and_values(self, state, batch=False):
         if not batch:
@@ -168,13 +142,6 @@ class RND:
 
 
 
-    # def learn(self, experiences, idxs, is_weights, batch_size=BATCH_SIZE, gamma=GAMMA):
-    #     states, actions, int_rewards, ext_rewards, dones, int_values, ext_values, log_probs, next_int_values, next_ext_values, total_next_obs = experiences
-
-
-
-
-    # @mean_of_list
     def train(self, states, actions, int_rewards,
               ext_rewards, dones, int_values, ext_values,
               log_probs, next_int_values, next_ext_values, total_next_obs):
@@ -205,8 +172,9 @@ class RND:
         if self.config["sampling_algo"] == "per":
             self.memory.push_per_batch(total_next_obs)
         elif self.config["sampling_algo"] == "per-v2":
-            self.memory.push_batch(total_next_obs)
-    
+            self.memory.push_per2_batch(total_next_obs)
+        elif self.config["sampling_algo"] == "per-v3":
+            self.memory.push_per3_batch(total_next_obs, int_rewards)
 
 
         for epoch in range(self.config["n_epochs"]):
@@ -242,7 +210,7 @@ class RND:
                 int_v_losses.append(int_value_loss.item())
                 entropies.append(entropy.item())
 
-                if self.config['sampling_algo'] in ["per", "per-v2"]:
+                if self.config['sampling_algo'] in ["per", "per-v2", "per-v3"]:
                     state, idxs, is_weight = self.memory.sample(self.mini_batch_size)
 
                     minibatch = torch.Tensor(np.array(state)).to(self.device)
