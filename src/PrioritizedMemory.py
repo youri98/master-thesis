@@ -67,7 +67,7 @@ class PrioritizedReplay(object):
     """
     Proportional Prioritization
     """
-    def __init__(self, capacity, state_shape, alpha=0.6, beta_start = 0.4, beta_frames=100000):
+    def __init__(self, capacity, state_shape, alpha=0.6, beta_start = 0.4, beta_frames=100000, fix_beta=False):
         self.alpha = alpha
         self.beta_start = beta_start
         self.beta_frames = beta_frames
@@ -78,6 +78,7 @@ class PrioritizedReplay(object):
         self.priorities = np.zeros((capacity,), dtype=np.float32)
         self.priority_age = np.zeros((capacity,), dtype=np.uint8)
         self.max_prio = 1.0
+        self.fix_beta = fix_beta
     
     def beta_by_frame(self, frame_idx):
         """
@@ -88,7 +89,10 @@ class PrioritizedReplay(object):
         correction over time, by defining a schedule on the exponent 
         that reaches 1 only at the end of learning. In practice, we linearly anneal from its initial value 0 to 1
         """
-        return min(1.0, self.beta_start + frame_idx * (1.0 - self.beta_start) / self.beta_frames)
+        if not self.fix_beta:
+            return min(1.0, self.beta_start + frame_idx * (1.0 - self.beta_start) / self.beta_frames)
+        else:
+            return self.beta_start
     
     def push_per_batch(self, states):
         # assert state.ndim == next_state.ndim
@@ -179,6 +183,7 @@ class PrioritizedReplay(object):
         indices = np.random.choice(N, batch_size, p=P) 
         samples = [self.buffer[idx] for idx in indices]
         
+
         beta = self.beta_by_frame(self.frame)
         self.frame+=1
                 

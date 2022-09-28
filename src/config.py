@@ -22,6 +22,7 @@ def get_params():
     parser.add_argument("--mem_size", default=1, type=int, help="relative size of memory")
     parser.add_argument("--discard_intrinsic_reward", default=False, action="store_true", help="Discard intrinsic reward and only use extrinsic reward")
     parser.add_argument("--sampling_algo", default="uniform", choices=["uniform", "per", "per-v2"], help="way of sampling from replay buffer")
+    parser.add_argument("--fix_beta", default=False, action="store_true", help="whether to anneal bias")
 
     # parser.add_argument("--do_test", action="store_true",
     #                     help="The flag determines whether to train the agent or play with it.")
