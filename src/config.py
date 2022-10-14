@@ -11,7 +11,7 @@ def get_params():
                              " counted by iterations.")
     parser.add_argument("--algo", default="RND", help="Use RND or APE", choices=["RND", "RND-Bayes", "RND-MC", "RND-K"])
     parser.add_argument("--record", default=False, action="store_true", help="Save recording in model folder")
-    parser.add_argument("--total_rollouts", default=int(1e1), type=int, help="Total number of rollouts per environment")
+    parser.add_argument("--total_rollouts", default=int(1e6), type=int, help="Total number of rollouts per environment")
     parser.add_argument("--env", default="MontezumaRevengeNoFrameskip-v4", help="Name of the environment to run the model on")
     parser.add_argument("--mode", default="train_from_scratch", help="whether to train or test", choices=["train_from_scratch", "train_from_chkpt", "test"])
     parser.add_argument("--verbose", default=False, action="store_true")
@@ -23,7 +23,10 @@ def get_params():
     parser.add_argument("--discard_intrinsic_reward", default=False, action="store_true", help="Discard intrinsic reward and only use extrinsic reward")
     parser.add_argument("--sampling_algo", default="uniform", choices=["uniform", "per", "per-v2"], help="way of sampling from replay buffer")
     parser.add_argument("--fix_beta", default=False, action="store_true", help="whether to anneal bias")
+    parser.add_argument("--beta", default=0.4, type=float, help="beta start")
+    parser.add_argument("--alpha", default=0.6, type=float, help="alpha")
 
+    parser.add_argument("--total_frames", default=int(1e9), type=int, help="Total number of frames")
     # parser.add_argument("--do_test", action="store_true",
     #                     help="The flag determines whether to train the agent or play with it.")
     parser.add_argument("--render", action="store_true",

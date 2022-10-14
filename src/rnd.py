@@ -38,8 +38,8 @@ class RND:
 
 
         if self.config["sampling_algo"] in ["per", "per-v2", "per-v3"]:
-            self.memory_capacity = self.config["n_workers"] * self.config["rollout_length"] * self.config["mem_size"]
-            self.memory = PrioritizedReplay(self.memory_capacity, self.config["obs_shape"], fix_beta=self.config["fix_beta"])
+            self.memory_capacity = self.config["n_workers"] * self.config["rollout_length"] * self.config["mem_size"] 
+            self.memory = PrioritizedReplay(self.memory_capacity, self.config["obs_shape"], beta_start=self.config["beta"], alpha=self.config["alpha"], fix_beta=self.config["fix_beta"]) #beta_frames=10**6)
         else:    
             self.memory = DefaultMemory(self.config["mem_size"], self.config["n_workers"] * self.config["rollout_length"], self.config["obs_shape"])
 

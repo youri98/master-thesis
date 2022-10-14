@@ -15,7 +15,6 @@ from config import get_params
 
 
 from ale_py import ALEInterface
-from ale_py.roms import SpaceInvaders, KingKong, MontezumaRevenge
 
 
 

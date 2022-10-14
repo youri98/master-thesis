@@ -25,6 +25,8 @@ def train_model(config, add_noisy_tv=False, **kwargs):
         if personal_key is not None:
             os.environ["WANDB_API_KEY"] = personal_key.read().strip()
 
+    config["n_workers"] = 56
+
     temp_env = gym.make(config["env"])
 
     if "Continuous" not in config["env"]:
@@ -301,6 +303,9 @@ def train_model(config, add_noisy_tv=False, **kwargs):
             logger.time_stop("param saving time")
             recording = []
             recording_int_rewards = []
+            
+        if n_frames > config["total_frames"]:
+            break
 
 def noisy_tv(obs):
     selection = obs[40:60, 70:]
