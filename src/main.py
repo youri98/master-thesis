@@ -254,9 +254,9 @@ def train_model(config, add_noisy_tv=False, **kwargs):
             logger.time_start()
 
             if config["sampling_algo"] in ["per-v2", "per-v3"]:
-                age_percentage, _ = agent.memory.get_priority_age()
+                age_percentage, age = agent.memory.get_priority_age()
             else:
-                age_percentage = None
+                age_percentage, age = None, None
 
 
             logger.log_iteration(iteration,
@@ -266,7 +266,7 @@ def train_model(config, add_noisy_tv=False, **kwargs):
                                         total_ext_rewards.mean(),
                                         total_action_probs.max(-1).mean(),
                                         recording_int_rewards.mean(),
-                                        age_percentage
+                                        age, age_percentage
                                         )
 
             if "MountainCar" in config["env"]:
@@ -322,7 +322,7 @@ def noisy_tv(obs):
 if __name__ == '__main__':
     config = get_params()
     # # run 1
-    config["env"] = "ALE/DonkeyKong-v5"
+    # config["env"] = "ALE/DonkeyKong-v5"
 
     # config["env"] = "MountainCar-v0"
     # config.update({"state_shape": (2,), "obs_shape": (2,)})

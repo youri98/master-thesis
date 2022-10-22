@@ -126,7 +126,7 @@ class Logger:
 
     def log_iteration(self, *args):
 
-        iteration, n_frames, (pg_losses, ext_value_losses, int_value_losses, rnd_losses, entropies, advs), int_reward, ext_reward, action_prob, recording_int_rewards, age_percentage = args
+        iteration, n_frames, (pg_losses, ext_value_losses, int_value_losses, rnd_losses, entropies, advs), int_reward, ext_reward, action_prob, recording_int_rewards, age, age_percentage = args
         # self.running_act_prob = self.exp_avg(self.running_act_prob, action_prob)
         # self.running_int_reward = self.exp_avg(self.running_int_reward, int_reward)
         # self.running_training_logs = self.exp_avg(self.running_training_logs, np.array(training_logs))
@@ -147,9 +147,12 @@ class Logger:
             # "Extrinsic Explained variance": self.running_training_logs[6],
         }
 
-        if age_percentage:
-            for age, percentage in zip(*age_percentage):
-                wandb.log({f"{age}" : percentage}, step=iteration)
+        if age_percentage is not None:
+            for a, p in zip(*age_percentage):
+                wandb.log({f"{a}" : p}, step=iteration)
+            
+        if age is not None:
+            wandb.log({"age distribution": age}, step=iteration)
 
         params["RND Loss"] = rnd_losses
 
