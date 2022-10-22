@@ -131,6 +131,7 @@ def train_model(config, add_noisy_tv=False, **kwargs):
         cum_dones = 0
 
         for iteration in tqdm(range(init_iteration, config["total_rollouts"] + 1), disable=not config["verbose"]):
+            logger.iteration = iteration
 
             total_states = init_states
             total_actions = init_actions
@@ -203,7 +204,7 @@ def train_model(config, add_noisy_tv=False, **kwargs):
                         if "episode" in infos[0]:
 
                             visited_rooms = infos[0]["episode"]["visited_room"]
-                            logger.log_episode(iteration, episode, episode_ext_reward, visited_rooms)
+                            logger.log_episode(episode, episode_ext_reward, visited_rooms)
                             # if episode_ext_reward != 0:
                             #     print(episode_ext_reward)
                         episode_ext_reward = 0
@@ -259,8 +260,7 @@ def train_model(config, add_noisy_tv=False, **kwargs):
                 age_percentage, age = None, None
 
 
-            logger.log_iteration(iteration,
-                                        n_frames,
+            logger.log_iteration(       n_frames,
                                         training_logs,
                                         total_int_rewards.mean(),
                                         total_ext_rewards.mean(),
@@ -274,8 +274,7 @@ def train_model(config, add_noisy_tv=False, **kwargs):
 
                 mean_completion_time = np.true_divide(concatenate(total_completion_time).sum(),(concatenate(total_completion_time)!=0).sum())
 
-                logger.log_mountaincar_states(iteration,
-                                        concatenate(total_states), concatenate(total_dones).sum(), hits, cum_hits, cum_ext_reward, cum_dones, mean_completion_time)
+                logger.log_mountaincar_states(concatenate(total_states), concatenate(total_dones).sum(), hits, cum_hits, cum_ext_reward, cum_dones, mean_completion_time)
             
                 
 
@@ -289,14 +288,16 @@ def train_model(config, add_noisy_tv=False, **kwargs):
 
             # wandb.log({"image": wandb.Image(recording[23])}, step=iteration)
             if config["record"]:
-                logger.log_recording(iteration, recording)
+                logger.log_recording(recording)
                 # logger.save_recording_local(iteration, recording)
+            if config["theta"] and config["k"]:
+                logger.log_distribution(agent.memory.distribution.tolist())
 
             logger.time_stop("logging time")
             logger.time_start()
 
             if iteration % config["interval"] == 0 or iteration == config["total_rollouts"]:
-                logger.save_params(episode, iteration)
+                logger.save_params(episode)
                 # logger.save_score_to_json()
                 logger.time_stop()
 
@@ -335,6 +336,8 @@ if __name__ == '__main__':
     config["discard_intrinsic_reward"] = False
     # config["max_frames_per_episode"] = 2000
     config["record"] = True
+    config["k"] = 1.5
+    config["theta"] = 2
 
     train_model(config, add_noisy_tv=False)
     wandb.finish()

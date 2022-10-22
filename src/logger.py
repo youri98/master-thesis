@@ -8,6 +8,8 @@ from collections import deque
 import wandb
 import json
 import cv2
+import matplotlib.pyplot as plt
+
 
 class Logger:
     def __init__(self, agent, **config):
@@ -32,6 +34,7 @@ class Logger:
         self.running_last_10_ext_r = 0
         self.best_score = 0
         self.timer = {}
+        self.iteration = 0
 
         self.run_id = wandb.util.generate_id()
         wandb.init(project="RND", entity="youri",
@@ -71,14 +74,14 @@ class Logger:
         self.timer[kind] = self.timer[kind] + (time.time(
         ) - self.start_time) if kind in self.timer else (time.time() - self.start_time)
 
-    def log_recording(self, iteration, recording, fps=60):
+    def log_recording(self, recording, fps=60):
         if recording is not None:
             recording = np.expand_dims(recording, 1)
             wandb.log({"video": wandb.Video(
-                np.array(recording), fps=fps, format='gif')}, step=iteration)
+                np.array(recording), fps=fps, format='gif')}, step=self.iteration)
             # self.scores["Recording"].append(recording.tolist())
 
-    def save_recording_local(self, iteration, recording, fps=60):
+    def save_recording_local(self, recording, fps=60):
         frame_size = (self.config["obs_shape"][2],
                         self.config["obs_shape"][1])
 
@@ -86,7 +89,7 @@ class Logger:
         # https://stackoverflow.com/questions/49530857/python-opencv-video-format-play-in-browser
 
         out = cv2.VideoWriter(
-            "Models/" + self.log_dir  + "/recording/" + str(iteration) + ".ogg", fourcc, fps, frame_size, 0)
+            "Models/" + self.log_dir  + "/recording/" + str(self.iteration) + ".ogg", fourcc, fps, frame_size, 0)
 
 
         # with open("Models/" + self.log_dir  + "/recording/" + str(iteration) + ".txt", "w") as file:
@@ -108,7 +111,7 @@ class Logger:
         out.release()
 
     def log_episode(self, *args):
-        iteration, self.episode, self.episode_ext_reward, self.visited_rooms = args
+        self.episode, self.episode_ext_reward, self.visited_rooms = args
         self.max_episode_reward = max(
             self.max_episode_reward, self.episode_ext_reward)
         # Episode Extrinsic Reward
@@ -116,7 +119,7 @@ class Logger:
         # Episode Maximum Reward
         wandb.log({"Episode Extrinsic Reward": self.episode_ext_reward, "Episode Visited Rooms": len(
             self.visited_rooms), "Episode Maximum Reward": self.max_episode_reward,
-            "Episode": self.episode}, step=iteration)
+            "Episode": self.episode}, step=self.iteration)
 
     def save_score_to_json(self):
         with open("Models/" + self.log_dir + '/scores.json', 'w') as file:
@@ -124,9 +127,14 @@ class Logger:
 
             file.write(json.dumps(norm_scores))
 
+    def log_distribution(self, probs):
+        plt.plot([i for i in range(len(probs))], probs)
+        wandb.log({"Gamma Distribution": wandb.Image(plt)}, step=self.iteration)
+        plt.close()
+
     def log_iteration(self, *args):
 
-        iteration, n_frames, (pg_losses, ext_value_losses, int_value_losses, rnd_losses, entropies, advs), int_reward, ext_reward, action_prob, recording_int_rewards, age, age_percentage = args
+        n_frames, (pg_losses, ext_value_losses, int_value_losses, rnd_losses, entropies, advs), int_reward, ext_reward, action_prob, recording_int_rewards, age, age_percentage = args
         # self.running_act_prob = self.exp_avg(self.running_act_prob, action_prob)
         # self.running_int_reward = self.exp_avg(self.running_int_reward, int_reward)
         # self.running_training_logs = self.exp_avg(self.running_training_logs, np.array(training_logs))
@@ -149,19 +157,19 @@ class Logger:
 
         if age_percentage is not None:
             for a, p in zip(*age_percentage):
-                wandb.log({f"{a}" : p}, step=iteration)
+                wandb.log({f"{a}" : p}, step=self.iteration)
             
         if age is not None:
-            wandb.log({"age distribution": age}, step=iteration)
+            wandb.log({"age distribution": age}, step=self.iteration)
 
         params["RND Loss"] = rnd_losses
 
 
 
         params.update(self.timer)
-        wandb.log(params, step=iteration)
+        wandb.log(params, step=self.iteration)
 
-    def save_params(self, episode, iteration):
+    def save_params(self, episode):
         params = {"current_policy_state_dict": self.agent.current_policy.state_dict(),
                     "predictor_model_state_dict": self.agent.predictor_model.state_dict(),
                     "target_model_state_dict": self.agent.target_model.state_dict(),
@@ -171,7 +179,7 @@ class Logger:
                     "int_reward_rms_mean": self.agent.int_reward_rms.mean,
                     "int_reward_rms_var": self.agent.int_reward_rms.var,
                     "int_reward_rms_count": self.agent.int_reward_rms.count,
-                    "iteration": iteration,
+                    "iteration": self.iteration,
                     "episode": episode,
                     "running_reward": self.running_ext_reward,
                     "visited_rooms": self.visited_rooms
@@ -206,4 +214,4 @@ class Logger:
 
         x, v = np.hsplit(state, 2)
         x, v = x.flatten(), v.flatten()
-        wandb.log({"position":x, "velocity":v, "dones": dones, "hits" : hits, "cumulative hits":cum_hits, "cumulative extrinisic reward": cum_ext_reward, "cumulative dones": cum_dones, "completion time":mean_completion_time}, step=iteration)
+        wandb.log({"position":x, "velocity":v, "dones": dones, "hits" : hits, "cumulative hits":cum_hits, "cumulative extrinisic reward": cum_ext_reward, "cumulative dones": cum_dones, "completion time":mean_completion_time}, step=self.iteration)

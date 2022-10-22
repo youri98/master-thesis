@@ -24,7 +24,9 @@ def get_params():
     parser.add_argument("--sampling_algo", default="uniform", choices=["uniform", "per", "per-v2"], help="way of sampling from replay buffer")
     parser.add_argument("--fix_beta", default=False, action="store_true", help="whether to anneal bias")
     parser.add_argument("--beta", default=0.4, type=float, help="beta start")
-    parser.add_argument("--alpha", default=0.6, type=float, help="alpha")
+    parser.add_argument("--alpha", default=None, type=float, help="alpha")
+    parser.add_argument("--k", default=None, type=float, help="k Gamma")
+    parser.add_argument("--theta", default=2, type=float, help="theta Gamma")
 
     parser.add_argument("--total_frames", default=int(1e9), type=int, help="Total number of frames")
     # parser.add_argument("--do_test", action="store_true",

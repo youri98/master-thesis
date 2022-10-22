@@ -39,7 +39,7 @@ class RND:
 
         if self.config["sampling_algo"] in ["per", "per-v2", "per-v3"]:
             self.memory_capacity = self.config["n_workers"] * self.config["rollout_length"] * self.config["mem_size"] 
-            self.memory = PrioritizedReplay(self.memory_capacity, self.config["obs_shape"], beta_start=self.config["beta"], alpha=self.config["alpha"], fix_beta=self.config["fix_beta"]) #beta_frames=10**6)
+            self.memory = PrioritizedReplay(self.memory_capacity, config=self.config) #beta_frames=10**6)
         else:    
             self.memory = DefaultMemory(self.config["mem_size"], self.config["n_workers"] * self.config["rollout_length"], self.config["obs_shape"])
 
@@ -169,12 +169,8 @@ class RND:
 
         pg_losses, ext_v_losses, int_v_losses, rnd_losses, entropies = [], [], [], [], []
 
-        if self.config["sampling_algo"] == "per":
-            self.memory.push_per_batch(total_next_obs)
-        elif self.config["sampling_algo"] == "per-v2":
-            self.memory.push_per2_batch(total_next_obs)
-        elif self.config["sampling_algo"] == "per-v3":
-            self.memory.push_per3_batch(total_next_obs, int_rewards)
+
+        self.memory.push_batch(total_next_obs, int_rewards)
 
 
         for epoch in range(self.config["n_epochs"]):
@@ -221,11 +217,12 @@ class RND:
 
                     # for idx, err in zip(idxs, error.detach().cpu().numpy().tolist()):
                     #     self.memory.update(idx, err)
-
-                    rnd_loss = error * torch.Tensor(is_weight).to(self.device)
+                    rnd_loss = error * torch.Tensor(is_weight).to(self.device) if is_weight else error
+                    
                     rnd_loss = rnd_loss.mean()
 
-                    self.memory.update_priorities(idxs, error.detach().cpu().numpy())
+                    if not self.memory.use_gamma:
+                        self.memory.update_priorities(idxs, error.detach().cpu().numpy())
 
                 
                 else:

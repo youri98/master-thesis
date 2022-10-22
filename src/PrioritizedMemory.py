@@ -6,6 +6,7 @@ import random
 import numpy as np
 from SumTree import SumTree
 from operator import itemgetter
+import matplotlib.pyplot as plt
 
 # class Memory:  # stored as ( s, a, r, s_ ) in SumTree
 #     e = 0.01 
@@ -67,23 +68,29 @@ class PrioritizedReplay(object):
     """
     Proportional Prioritization
     """
-    def __init__(self, capacity, state_shape, alpha=0.6, beta_start = 0.4, beta_frames=100000, fix_beta=False, k=None, theta=None):
-        self.alpha = alpha
-        self.beta_start = beta_start
+    def __init__(self, capacity, beta_frames=1000000, config=None):
+        self.config = config
+        self.alpha = config["alpha"]
+        self.beta_start = config["beta"]
         self.beta_frames = beta_frames
         self.frame = 1 #for beta calculation
         self.capacity   = capacity
-        self.buffer     = np.zeros((capacity, *state_shape), dtype=np.float64)
+        self.buffer     = np.zeros((capacity, *config["obs_shape"]), dtype=np.float64)
         self.pos        = 0
         self.priorities = np.zeros((capacity,), dtype=np.float32)
         self.priority_age = np.zeros((capacity,), dtype=np.uint8)
         self.max_prio = 1.0
-        self.fix_beta = fix_beta
+        self.fix_beta = config["fix_beta"]
+        self.buffer_unit_size = self.config["n_workers"] * self.config["rollout_length"]
+        self.temp_counter = 0
 
-        
-        self.theta = theta
-        self.k = k
-        self.use_gamma = theta and k
+
+        self.config = config
+        self.theta = config["theta"]
+        self.k = config["k"]
+        self.use_gamma = self.theta and self.k
+        self.gamma = lambda x: (x ** (self.k - 1) * np.exp(-x/self.theta)) / ((self.theta ** self.k) * np.math.gamma(self.k))
+        self.distribution = None
         
     
     def beta_by_frame(self, frame_idx):
@@ -106,7 +113,6 @@ class PrioritizedReplay(object):
         # next_state = np.expand_dims(next_state, 0)
         
         # max_prio = self.priorities.max() if self.buffer else 1.0 # gives max priority if buffer is not empty else 1
-        indices = [i for i in range(128)]
         temp = list(zip(self.buffer, self.priorities, self.priority_age))
         temp.sort(key=itemgetter(1))
 
@@ -118,17 +124,31 @@ class PrioritizedReplay(object):
     
     def push_gamma(self, states):
         # since most recent are appended at the end of the states array and we want most recent to oldest
-        states = np.flip(states, 0)
+        indices = [i for i in range(self.config["rollout_length"])] * self.config["n_workers"]
+
+        temp = list(zip(states, indices))
+        temp.sort(key=lambda v: (v[1], np.random.random()), reverse=True)
+        states = [x[0] for x in temp]
 
         if self.pos >= self.capacity:
 
-            self.buffer[len(states):] = self.buffer[:len(states)]
+            self.buffer[len(states):] = self.buffer[:-len(states)]
             self.buffer[:len(states)] = states
             
         else:
-            self.buffer[self.pos:len(states)] = states
+            self.buffer[self.pos:self.pos+len(states)] = states
             self.pos += len(states)
     
+    def push_batch(self, states, int_rewards):
+        if self.use_gamma:
+            self.push_gamma(states)
+        elif self.config["sampling_algo"] == "per":
+            self.push_per_batch(states)
+        elif self.config["sampling_algo"] == "per-v2":
+            self.push_per2_batch(states)
+        elif self.config["sampling_algo"] == "per-v3":
+            self.push_per3_batch(states, int_rewards)
+
     def push_per2_batch(self, states):
 
         # sort
@@ -190,18 +210,37 @@ class PrioritizedReplay(object):
 
 
     def sample_gamma(self, batch_size):
-        indices = []
-
-        while indices < batch_size:
-            idx_float = np.random.gamma(self.k, self.theta, 1)
-            idx =  self.capacity / idx_float
-            if idx < self.capacity and idx < self.pos: # in beginning cases when memory isnt completely filled
-                indices.append(idx)
         
-        samples = [self.buffer[idx] for idx in indices]
+        probs = [self.gamma(x/self.buffer_unit_size) for x in range(self.pos)]
+        probs = probs / sum(probs)
+        self.temp_counter += 1
+
+
+        padding = self.capacity - len(probs)
+
+        if padding > 0:
+            probs = np.append(probs, np.zeros(padding))
+
+
+        # if self.temp_counter == 16*self.config["mem_size"]:
+        #     plt.plot([i for i in range(self.capacity)], probs)
+        #     plt.show()
+
+        self.distribution = probs
+            
+
+
+        # while len(indices) < batch_size:
+        #     idx_float = np.random.gamma(self.k, self.theta, 1)[0]
+        #     idx = round(self.capacity / idx_float)
+        #     if idx < self.capacity and idx < self.pos: # in beginning cases when memory isnt completely filled
+        #         indices.append(idx)
+        
+        indices = np.random.choice([i for i in range(self.capacity)], batch_size, p=probs)
+        samples = self.buffer[indices]
         samples = np.array([s[0] for s in samples], dtype=np.float32)
 
-        return samples, indices, None
+        return samples, None, None
 
 
     def sample(self, batch_size):
