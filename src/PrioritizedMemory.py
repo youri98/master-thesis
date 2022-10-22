@@ -67,7 +67,7 @@ class PrioritizedReplay(object):
     """
     Proportional Prioritization
     """
-    def __init__(self, capacity, state_shape, alpha=0.6, beta_start = 0.4, beta_frames=100000, fix_beta=False):
+    def __init__(self, capacity, state_shape, alpha=0.6, beta_start = 0.4, beta_frames=100000, fix_beta=False, k=None, theta=None):
         self.alpha = alpha
         self.beta_start = beta_start
         self.beta_frames = beta_frames
@@ -79,6 +79,12 @@ class PrioritizedReplay(object):
         self.priority_age = np.zeros((capacity,), dtype=np.uint8)
         self.max_prio = 1.0
         self.fix_beta = fix_beta
+
+        
+        self.theta = theta
+        self.k = k
+        self.use_gamma = theta and k
+        
     
     def beta_by_frame(self, frame_idx):
         """
@@ -100,13 +106,28 @@ class PrioritizedReplay(object):
         # next_state = np.expand_dims(next_state, 0)
         
         # max_prio = self.priorities.max() if self.buffer else 1.0 # gives max priority if buffer is not empty else 1
-        
+        indices = [i for i in range(128)]
+        temp = list(zip(self.buffer, self.priorities, self.priority_age))
+        temp.sort(key=itemgetter(1))
 
         self.buffer[self.pos: self.pos + len(states)] = states
         
         self.priorities[self.pos] = self.max_prio
         self.pos = (self.pos + len(states)) % self.capacity # lets the pos circle in the ranges of capacity if pos+1 > cap --> new posi = 0
         self.max_prio = self.priorities.max()
+    
+    def push_gamma(self, states):
+        # since most recent are appended at the end of the states array and we want most recent to oldest
+        states = np.flip(states, 0)
+
+        if self.pos >= self.capacity:
+
+            self.buffer[len(states):] = self.buffer[:len(states)]
+            self.buffer[:len(states)] = states
+            
+        else:
+            self.buffer[self.pos:len(states)] = states
+            self.pos += len(states)
     
     def push_per2_batch(self, states):
 
@@ -168,34 +189,53 @@ class PrioritizedReplay(object):
         return (age, counts), self.priority_age
 
 
-    def sample(self, batch_size):
-        N = len(self.buffer)
-        if N == self.capacity:
-            prios = self.priorities
-        else:
-            prios = self.priorities[:self.pos]
-            
-        # calc P = p^a/sum(p^a)
-        probs  = prios ** self.alpha
-        P = probs/probs.sum()
+    def sample_gamma(self, batch_size):
+        indices = []
+
+        while indices < batch_size:
+            idx_float = np.random.gamma(self.k, self.theta, 1)
+            idx =  self.capacity / idx_float
+            if idx < self.capacity and idx < self.pos: # in beginning cases when memory isnt completely filled
+                indices.append(idx)
         
-        #gets the indices depending on the probability p
-        indices = np.random.choice(N, batch_size, p=P) 
         samples = [self.buffer[idx] for idx in indices]
-        
-
-        beta = self.beta_by_frame(self.frame)
-        self.frame+=1
-                
-        #Compute importance-sampling weight
-        weights  = (N * P[indices]) ** (-beta)
-        # normalize weights
-        weights /= weights.max() 
-        weights  = np.array(weights, dtype=np.float32) 
-
         samples = np.array([s[0] for s in samples], dtype=np.float32)
-        
-        return samples, indices, weights
+
+        return samples, indices, None
+
+
+    def sample(self, batch_size):
+        if self.use_gamma:
+            return self.sample_gamma(batch_size)
+        else:
+
+            N = len(self.buffer)
+            if N == self.capacity:
+                prios = self.priorities
+            else:
+                prios = self.priorities[:self.pos]
+                
+            # calc P = p^a/sum(p^a)
+            probs  = prios ** self.alpha
+            P = probs/probs.sum()
+            
+            #gets the indices depending on the probability p
+            indices = np.random.choice(N, batch_size, p=P) 
+            samples = [self.buffer[idx] for idx in indices]
+            
+
+            beta = self.beta_by_frame(self.frame)
+            self.frame+=1
+                    
+            #Compute importance-sampling weight
+            weights  = (N * P[indices]) ** (-beta)
+            # normalize weights
+            weights /= weights.max() 
+            weights  = np.array(weights, dtype=np.float32) 
+
+            samples = np.array([s[0] for s in samples], dtype=np.float32)
+            
+            return samples, indices, weights
 
     def get_time(self):
         self.priority_age    
