@@ -35,7 +35,7 @@ def train_model(config, add_noisy_tv=False, **kwargs):
 
     temp_env.close()
     config["n_workers"] = multiprocessing.cpu_count() #* torch.cuda.device_count() if torch.cuda.is_available() else multiprocessing.cpu_count()
-    config["n_workers"] = 56
+    # config["n_workers"] = 56
     config.update({"batch_size": (config["rollout_length"] * config["n_workers"]) // config["n_mini_batch"]})
     config.update({"predictor_proportion": 32 / config["n_workers"]})
     workers = [Worker(i, **config) for i in range(config["n_workers"])] 
