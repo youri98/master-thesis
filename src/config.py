@@ -23,10 +23,13 @@ def get_params():
     parser.add_argument("--discard_intrinsic_reward", default=False, action="store_true", help="Discard intrinsic reward and only use extrinsic reward")
     parser.add_argument("--sampling_algo", default="uniform", choices=["uniform", "per", "per-v2"], help="way of sampling from replay buffer")
     parser.add_argument("--fix_beta", default=False, action="store_true", help="whether to anneal bias")
-    parser.add_argument("--beta", default=0.4, type=float, help="beta start")
-    parser.add_argument("--alpha", default=None, type=float, help="alpha")
+    parser.add_argument("--beta", default=0, type=float, help="beta start")
+    parser.add_argument("--alpha", default=1, type=float, help="alpha")
     parser.add_argument("--k", default=None, type=float, help="k Gamma")
-    parser.add_argument("--theta", default=2, type=float, help="theta Gamma")
+    parser.add_argument("--theta", default=None, type=float, help="theta Gamma")
+    parser.add_argument("--c", default=None, type=float, help="c")
+    parser.add_argument("--use_weight_model", default=False, action="store_true", help="weight model to determine theta, k, and c")
+    parser.add_argument("--without_maximal_appending", default=False, action="store_true", help="if to use maximal priority appending when using PER")
 
     parser.add_argument("--total_frames", default=int(1e9), type=int, help="Total number of frames")
     # parser.add_argument("--do_test", action="store_true",

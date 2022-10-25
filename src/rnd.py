@@ -40,6 +40,7 @@ class RND:
         if self.config["sampling_algo"] in ["per", "per-v2", "per-v3"]:
             self.memory_capacity = self.config["n_workers"] * self.config["rollout_length"] * self.config["mem_size"] 
             self.memory = PrioritizedReplay(self.memory_capacity, config=self.config) #beta_frames=10**6)
+            self.weight_model = WeightModel()
         else:    
             self.memory = DefaultMemory(self.config["mem_size"], self.config["n_workers"] * self.config["rollout_length"], self.config["obs_shape"])
 
@@ -207,19 +208,26 @@ class RND:
                 entropies.append(entropy.item())
 
                 if self.config['sampling_algo'] in ["per", "per-v2", "per-v3"]:
+
+                    if self.config["use_weight_model"]:
+                        self.memory.theta, self.memory.k, self.memory.c = self.weight_model()
+
+
                     state, idxs, is_weight = self.memory.sample(self.mini_batch_size)
 
                     minibatch = torch.Tensor(np.array(state)).to(self.device)
-
                     minibatch = torch.unsqueeze(minibatch, dim=1)
 
                     error = self.calculate_rnd_loss(minibatch)
 
                     # for idx, err in zip(idxs, error.detach().cpu().numpy().tolist()):
                     #     self.memory.update(idx, err)
-                    rnd_loss = error * torch.Tensor(is_weight).to(self.device) if is_weight else error
-                    
+                    rnd_loss = error if is_weight is None else error * torch.Tensor(is_weight).to(self.device)
                     rnd_loss = rnd_loss.mean()
+
+                    if self.config["use_weight_model"]:
+                        self.memory.theta, self.memory.k, self.memory.c = self.weight_model()
+                        weight_model_loss = rnd_loss
 
                     if not self.memory.use_gamma:
                         self.memory.update_priorities(idxs, error.detach().cpu().numpy())

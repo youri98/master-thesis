@@ -87,9 +87,11 @@ class PrioritizedReplay(object):
 
         self.config = config
         self.theta = config["theta"]
+        self.c = config["c"]
         self.k = config["k"]
         self.use_gamma = self.theta and self.k
         self.gamma = lambda x: (x ** (self.k - 1) * np.exp(-x/self.theta)) / ((self.theta ** self.k) * np.math.gamma(self.k))
+
         self.distribution = None
         
     
@@ -107,43 +109,51 @@ class PrioritizedReplay(object):
         else:
             return self.beta_start
     
-    def push_per_batch(self, states):
+    def push_per_batch(self, states, int_rewards):
         # assert state.ndim == next_state.ndim
         # state      = np.expand_dims(state, 0)
         # next_state = np.expand_dims(next_state, 0)
         
         # max_prio = self.priorities.max() if self.buffer else 1.0 # gives max priority if buffer is not empty else 1
-        temp = list(zip(self.buffer, self.priorities, self.priority_age))
-        temp.sort(key=itemgetter(1))
+        # temp = list(zip(self.buffer, self.priorities, self.priority_age))
+        # temp.sort(key=itemgetter(1))
+        int_rewards = int_rewards.flatten()
 
         self.buffer[self.pos: self.pos + len(states)] = states
         
-        self.priorities[self.pos] = self.max_prio
+        self.priorities[self.pos:self.pos + len(states)] = int_rewards if self.config["without_maximal_appending"] else self.max_prio 
         self.pos = (self.pos + len(states)) % self.capacity # lets the pos circle in the ranges of capacity if pos+1 > cap --> new posi = 0
         self.max_prio = self.priorities.max()
     
-    def push_gamma(self, states):
+    def push_gamma(self, states, int_rewards):
+        int_rewards = int_rewards.flatten()
         # since most recent are appended at the end of the states array and we want most recent to oldest
         indices = [i for i in range(self.config["rollout_length"])] * self.config["n_workers"]
 
-        temp = list(zip(states, indices))
+        temp = list(zip(states, indices, int_rewards))
         temp.sort(key=lambda v: (v[1], np.random.random()), reverse=True)
         states = [x[0] for x in temp]
+        deltas = [x[2] for x in temp]
 
         if self.pos >= self.capacity:
 
             self.buffer[len(states):] = self.buffer[:-len(states)]
             self.buffer[:len(states)] = states
+
+            self.priorities[len(states):] = self.priorities[:-len(states)]
+            self.priorities[:len(states)] = deltas
             
         else:
             self.buffer[self.pos:self.pos+len(states)] = states
+            self.priorities[self.pos:self.pos+len(states)] = deltas
+
             self.pos += len(states)
     
     def push_batch(self, states, int_rewards):
         if self.use_gamma:
-            self.push_gamma(states)
+            self.push_gamma(states, int_rewards)
         elif self.config["sampling_algo"] == "per":
-            self.push_per_batch(states)
+            self.push_per_batch(states, int_rewards)
         elif self.config["sampling_algo"] == "per-v2":
             self.push_per2_batch(states)
         elif self.config["sampling_algo"] == "per-v3":
@@ -242,10 +252,37 @@ class PrioritizedReplay(object):
 
         return samples, None, None
 
+    def sample_with_gamma_weights(self, batch_size):
+        self.alpha = 1
+
+        # uniform sampling
+
+        indices = np.random.choice([i for i in range(self.pos)], batch_size) 
+
+        # gamma weighting
+        gamma_part = [self.gamma(x/self.buffer_unit_size) for x in range(self.pos)]
+        delta_part = [self.priorities[i] for i in range(self.pos)]
+
+        #total_func = lambda g,d: ((g)/self.c + d/(1 - self.c)) ** self.alpha
+        total_func = lambda g,d: (g*self.c + d*(1 - self.c)) ** self.alpha
+
+        samples_weight = [total_func(g,d) for g,d in zip(gamma_part, delta_part)]
+        self.distribution = samples_weight
+
+        samples_weight = np.array(samples_weight, dtype=np.float32)
+
+        samples_weight = samples_weight[indices]
+        samples = self.buffer[indices]
+        samples = np.array([s[0] for s in samples], dtype=np.float32)
+
+
+        return samples, None, samples_weight
+
 
     def sample(self, batch_size):
         if self.use_gamma:
-            return self.sample_gamma(batch_size)
+            return self.sample_with_gamma_weights(batch_size)
+            #return self.sample_gamma(batch_size)
         else:
 
             N = len(self.buffer)

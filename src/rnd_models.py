@@ -243,3 +243,30 @@ class KPredictorModel(nn.Module, ABC):
             result[i] = self.predictors[i](inputs)
 
         return torch.mean(result, 0)
+
+
+class WeightModel(nn.Module, ABC):
+
+    def __init__(self):
+        super(WeightModel, self).__init__()
+
+        input_size = 10
+
+        self.fc1 = nn.Linear(in_features=input_size, out_features=16)
+        self.fc2 = nn.Linear(in_features=16, out_features=16)
+
+        self.seq = nn.Sequential(self.fc1, self.fc2)
+
+        self.theta_layer = nn.Linear(in_features=16, out_features=1)
+        self.k_layer = nn.Linear(in_features=16, out_features=1)
+        self.c_layer = nn.Linear(in_features=16, out_features=1)
+
+
+    def forward(self, input):
+        input = torch.ones(size=(1,10))
+        h = self.seq(input)
+        theta = F.relu(self.theta_layer(h))
+        k = F.relu(self.k_layer(h))
+        c = F.sigmoid(self.c_layer(h))
+
+        return theta, k, c
