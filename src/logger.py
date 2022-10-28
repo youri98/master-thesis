@@ -40,8 +40,8 @@ class Logger:
         wandb.init(project="RND", entity="youri",
                    id=self.run_id, resume="allow", config=self.config)
 
-
-        if self.config["mode"] == "train_from_scratch":
+        
+        if self.config["interval"] is not None and self.config["mode"] == "train_from_scratch":
             self.create_model_folder()
 
         scoreskeys = ["Iteration", "N Frames", "Visited Rooms", "Action Probability", "Intrinsic Reward", "PG Loss", "Discriminator Loss", "Gen Loss", "Discriminator L1 Loss", "Generator L1 Loss",
@@ -64,8 +64,9 @@ class Logger:
         os.mkdir("Models/" + self.log_dir + "/recording")
 
     def log_config_params(self):
-        with open("Models/" + self.log_dir + '/config.json', 'w') as writer:
-            writer.write(json.dumps(self.config))
+        if self.config["interval"] is not None:
+            with open("Models/" + self.log_dir + '/config.json', 'w') as writer:
+                writer.write(json.dumps(self.config))
 
     def time_start(self):
         self.start_time = time.time()
@@ -75,40 +76,43 @@ class Logger:
         ) - self.start_time) if kind in self.timer else (time.time() - self.start_time)
 
     def log_recording(self, recording, fps=60):
-        if recording is not None:
-            recording = np.expand_dims(recording, 1)
-            wandb.log({"video": wandb.Video(
-                np.array(recording), fps=fps, format='gif')}, step=self.iteration)
-            # self.scores["Recording"].append(recording.tolist())
+        if self.config["interval"] is not None:
+            if recording is not None:
+                recording = np.expand_dims(recording, 1)
+                wandb.log({"video": wandb.Video(
+                    np.array(recording), fps=fps, format='gif')}, step=self.iteration)
+                # self.scores["Recording"].append(recording.tolist())
 
     def save_recording_local(self, recording, fps=60):
-        frame_size = (self.config["obs_shape"][2],
-                        self.config["obs_shape"][1])
+        if self.config["interval"] is not None:
 
-        fourcc = cv2.VideoWriter_fourcc(*'theo')
-        # https://stackoverflow.com/questions/49530857/python-opencv-video-format-play-in-browser
+            frame_size = (self.config["obs_shape"][2],
+                            self.config["obs_shape"][1])
 
-        out = cv2.VideoWriter(
-            "Models/" + self.log_dir  + "/recording/" + str(self.iteration) + ".ogg", fourcc, fps, frame_size, 0)
+            fourcc = cv2.VideoWriter_fourcc(*'theo')
+            # https://stackoverflow.com/questions/49530857/python-opencv-video-format-play-in-browser
+
+            out = cv2.VideoWriter(
+                "Models/" + self.log_dir  + "/recording/" + str(self.iteration) + ".ogg", fourcc, fps, frame_size, 0)
 
 
-        # with open("Models/" + self.log_dir  + "/recording/" + str(iteration) + ".txt", "w") as file:
+            # with open("Models/" + self.log_dir  + "/recording/" + str(iteration) + ".txt", "w") as file:
 
-            # file.write(recording)
+                # file.write(recording)
 
-        for image in recording:
-            #image = np.pad(image, ((height_pad, height_pad), (width_pad,width_pad)))
-            #image = np.mean(image, axis=0)
-            # image = np.rand(84,84,3)
-            # image = np.zeros(frame_size, dtype="uint8")
-            image = image.astype(np.uint8)
-            # image = np.expand_dims(image, axis=2)
-            # image = np.tile(image, (1, 1, 3))
-            # image = np.array(image)
+            for image in recording:
+                #image = np.pad(image, ((height_pad, height_pad), (width_pad,width_pad)))
+                #image = np.mean(image, axis=0)
+                # image = np.rand(84,84,3)
+                # image = np.zeros(frame_size, dtype="uint8")
+                image = image.astype(np.uint8)
+                # image = np.expand_dims(image, axis=2)
+                # image = np.tile(image, (1, 1, 3))
+                # image = np.array(image)
 
-            out.write(image)
+                out.write(image)
 
-        out.release()
+            out.release()
 
     def log_episode(self, *args):
         self.episode, self.episode_ext_reward, self.visited_rooms = args
@@ -122,10 +126,11 @@ class Logger:
             "Episode": self.episode}, step=self.iteration)
 
     def save_score_to_json(self):
-        with open("Models/" + self.log_dir + '/scores.json', 'w') as file:
-            norm_scores = {k: (v if k in ["N Frames", "Discriminator Loss", "Visited Rooms", "Iteration", "Recording"] or np.linalg.norm(v) == 0 else (v/np.linalg.norm(v)).tolist()) for k,v in self.scores.items()}
+        if self.config["interval"] is not None:
+            with open("Models/" + self.log_dir + '/scores.json', 'w') as file:
+                norm_scores = {k: (v if k in ["N Frames", "Discriminator Loss", "Visited Rooms", "Iteration", "Recording"] or np.linalg.norm(v) == 0 else (v/np.linalg.norm(v)).tolist()) for k,v in self.scores.items()}
 
-            file.write(json.dumps(norm_scores))
+                file.write(json.dumps(norm_scores))
 
     def log_distribution(self, probs):
         plt.plot([i for i in range(len(probs))], probs)
@@ -170,6 +175,7 @@ class Logger:
         wandb.log(params, step=self.iteration)
 
     def save_params(self, episode):
+        
         params = {"current_policy_state_dict": self.agent.current_policy.state_dict(),
                     "predictor_model_state_dict": self.agent.predictor_model.state_dict(),
                     "target_model_state_dict": self.agent.target_model.state_dict(),

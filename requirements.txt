@@ -1,7 +1,7 @@
 torch
 numpy
 wandb
-gym==0.15.7
+gym==0.26.0
 tqdm
 opencv-python
 ale-py

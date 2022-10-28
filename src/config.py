@@ -6,7 +6,7 @@ def get_params():
         description="Variable parameters based on the configuration of the machine or user's choice")
 
     parser.add_argument("--n_workers", default=2, type=int, help="Number of parallel environments.")
-    parser.add_argument("--interval", default=10000, type=int,
+    parser.add_argument("--interval", default=None,
                         help="The interval specifies how often different parameters should be saved and printed,"
                              " counted by iterations.")
     parser.add_argument("--algo", default="RND", help="Use RND or APE", choices=["RND", "RND-Bayes", "RND-MC", "RND-K"])

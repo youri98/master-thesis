@@ -334,6 +334,6 @@ class DefaultMemory(object):
         indices = np.random.randint(0, len(self.memory), size=mini_batch_size)
         return self.memory[indices]
 
-    def push_batch(self, *args):
-        self.memory[self.i: self.i + self.batch_size] = args
+    def push_batch(self, states):
+        self.memory[self.i: self.i + self.batch_size] = states
         self.i = np.mod(self.i + self.batch_size, self.memory_length)

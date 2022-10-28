@@ -296,10 +296,11 @@ def train_model(config, add_noisy_tv=False, **kwargs):
             logger.time_stop("logging time")
             logger.time_start()
 
-            if iteration % config["interval"] == 0 or iteration == config["total_rollouts"]:
-                logger.save_params(episode)
-                # logger.save_score_to_json()
-                logger.time_stop()
+            if config["interval"] is not None:
+                if iteration % config["interval"] == 0 or iteration == config["total_rollouts"]:
+                    logger.save_params(episode)
+                    # logger.save_score_to_json()
+                    logger.time_stop()
 
             logger.time_stop("param saving time")
             recording = []
@@ -331,7 +332,7 @@ if __name__ == '__main__':
     # config["algo"] = "RND"
     config["total_rollouts"] = 5000
     config["verbose"] = True
-    config["sampling_algo"] = "per"
+    config["sampling_algo"] = "uniform"
     config["mem_size"] = 4
     config["discard_intrinsic_reward"] = False
     # config["max_frames_per_episode"] = 20004

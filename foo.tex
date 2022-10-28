@@ -1,0 +1,119 @@
+
+% Table created by stargazer v.5.2.3 by Marek Hlavac, Social Policy Institute. E-mail: marek.hlavac at gmail.com
+% Date and time: Sat, Oct 15, 2022 - 12:57:25
+% Requires LaTeX packages: dcolumn 
+\begin{table}[!htbp] \centering 
+  \caption{Models} 
+  \label{} 
+\begin{tabular}{@{\extracolsep{5pt}}lD{.}{.}{-3} D{.}{.}{-3} D{.}{.}{-3} } 
+\\[-1.8ex]\hline 
+\hline \\[-1.8ex] 
+ & \multicolumn{3}{c}{\textit{Dependent variable:}} \\ 
+\cline{2-4} 
+\\[-1.8ex] & \multicolumn{3}{c}{Visited Number of Rooms} \\ 
+\\[-1.8ex] & \multicolumn{1}{c}{(1)} & \multicolumn{1}{c}{(2)} & \multicolumn{1}{c}{(3)}\\ 
+\hline \\[-1.8ex] 
+ algoPER (alpha:0.6, beta:0.4, B=10$\hat{\mkern6mu}$5) & -0.833^{***} & -0.270^{**} & -0.263^{***} \\ 
+  & (0.064) & (0.122) & (0.089) \\ 
+  & & & \\ 
+ algoPER (alpha:0.6, beta:0.4) & -1.126^{***} & -1.236^{***} & -1.677^{***} \\ 
+  & (0.057) & (0.118) & (0.083) \\ 
+  & & & \\ 
+ algoPER (alpha:1, beta:0) & -3.232^{***} & -0.672^{***} & 0.534^{***} \\ 
+  & (0.056) & (0.119) & (0.083) \\ 
+  & & & \\ 
+ log(frame) & 1.562^{***} & 1.562^{***} & -0.118^{***} \\ 
+  & (0.018) & (0.015) & (0.026) \\ 
+  & & & \\ 
+ mem\_size2 & -0.300^{***} & -0.242^{**} &  \\ 
+  & (0.063) & (0.117) &  \\ 
+  & & & \\ 
+ mem\_size4 & -1.061^{***} & 0.391^{***} &  \\ 
+  & (0.067) & (0.128) &  \\ 
+  & & & \\ 
+ mem\_size6 & -1.119^{***} & -0.417^{***} &  \\ 
+  & (0.067) & (0.117) &  \\ 
+  & & & \\ 
+ mem\_size8 & -1.065^{***} & 0.737^{***} &  \\ 
+  & (0.067) & (0.117) &  \\ 
+  & & & \\ 
+ algoPER (alpha:0.6, beta:0.4, B=10$\hat{\mkern6mu}$5):mem\_size2 &  & 0.130 &  \\ 
+  &  & (0.164) &  \\ 
+  & & & \\ 
+ algoPER (alpha:0.6, beta:0.4):mem\_size2 &  & -0.653^{***} &  \\ 
+  &  & (0.159) &  \\ 
+  & & & \\ 
+ algoPER (alpha:1, beta:0):mem\_size2 &  & 0.607^{***} &  \\ 
+  &  & (0.160) &  \\ 
+  & & & \\ 
+ algoPER (alpha:0.6, beta:0.4, B=10$\hat{\mkern6mu}$5):mem\_size4 &  & -1.502^{***} &  \\ 
+  &  & (0.172) &  \\ 
+  & & & \\ 
+ algoPER (alpha:0.6, beta:0.4):mem\_size4 &  & -0.438^{**} &  \\ 
+  &  & (0.176) &  \\ 
+  & & & \\ 
+ algoPER (alpha:1, beta:0):mem\_size4 &  & -3.443^{***} &  \\ 
+  &  & (0.168) &  \\ 
+  & & & \\ 
+ algoPER (alpha:0.6, beta:0.4, B=10$\hat{\mkern6mu}$5):mem\_size6 &  & 0.794^{***} &  \\ 
+  &  & (0.200) &  \\ 
+  & & & \\ 
+ algoPER (alpha:0.6, beta:0.4):mem\_size6 &  & 1.876^{***} &  \\ 
+  &  & (0.159) &  \\ 
+  & & & \\ 
+ algoPER (alpha:1, beta:0):mem\_size6 &  & -4.375^{***} &  \\ 
+  &  & (0.160) &  \\ 
+  & & & \\ 
+ algoPER (alpha:0.6, beta:0.4, B=10$\hat{\mkern6mu}$5):mem\_size8 &  & -0.943^{***} &  \\ 
+  &  & (0.200) &  \\ 
+  & & & \\ 
+ algoPER (alpha:0.6, beta:0.4):mem\_size8 &  & -0.146 &  \\ 
+  &  & (0.159) &  \\ 
+  & & & \\ 
+ algoPER (alpha:1, beta:0):mem\_size8 &  & -5.529^{***} &  \\ 
+  &  & (0.160) &  \\ 
+  & & & \\ 
+ poly(frame, 3)1 &  &  & 269.298^{***} \\ 
+  &  &  & (3.386) \\ 
+  & & & \\ 
+ poly(frame, 3)2 &  &  & -105.366^{***} \\ 
+  &  &  & (2.369) \\ 
+  & & & \\ 
+ poly(frame, 3)3 &  &  & 27.820^{***} \\ 
+  &  &  & (2.144) \\ 
+  & & & \\ 
+ poly(mem\_size, 3)1 &  &  & -260.071^{***} \\ 
+  &  &  & (3.616) \\ 
+  & & & \\ 
+ poly(mem\_size, 3)2 &  &  & 26.839^{***} \\ 
+  &  &  & (1.940) \\ 
+  & & & \\ 
+ poly(mem\_size, 3)3 &  &  & 0.681 \\ 
+  &  &  & (1.929) \\ 
+  & & & \\ 
+ algodefault:mem\_size &  &  & 0.900^{***} \\ 
+  &  &  & (0.016) \\ 
+  & & & \\ 
+ algoPER (alpha:0.6, beta:0.4, B=10$\hat{\mkern6mu}$5):mem\_size &  &  & 0.808^{***} \\ 
+  &  &  & (0.020) \\ 
+  & & & \\ 
+ algoPER (alpha:0.6, beta:0.4):mem\_size &  &  & 1.033^{***} \\ 
+  &  &  & (0.016) \\ 
+  & & & \\ 
+ algoPER (alpha:1, beta:0):mem\_size &  &  &  \\ 
+  &  &  &  \\ 
+  & & & \\ 
+ Constant & -22.508^{***} & -23.323^{***} & 5.222^{***} \\ 
+  & (0.341) & (0.309) & (0.503) \\ 
+  & & & \\ 
+\hline \\[-1.8ex] 
+Observations & \multicolumn{1}{c}{15,104} & \multicolumn{1}{c}{15,104} & \multicolumn{1}{c}{15,104} \\ 
+R$^{2}$ & \multicolumn{1}{c}{0.449} & \multicolumn{1}{c}{0.574} & \multicolumn{1}{c}{0.688} \\ 
+Adjusted R$^{2}$ & \multicolumn{1}{c}{0.448} & \multicolumn{1}{c}{0.574} & \multicolumn{1}{c}{0.688} \\ 
+Residual Std. Error & \multicolumn{1}{c}{2.553 (df = 15095)} & \multicolumn{1}{c}{2.244 (df = 15083)} & \multicolumn{1}{c}{1.921 (df = 15090)} \\ 
+F Statistic & \multicolumn{1}{c}{1,535.720$^{***}$ (df = 8; 15095)} & \multicolumn{1}{c}{1,017.986$^{***}$ (df = 20; 15083)} & \multicolumn{1}{c}{2,557.405$^{***}$ (df = 13; 15090)} \\ 
+\hline 
+\hline \\[-1.8ex] 
+\textit{Note:}  & \multicolumn{3}{r}{$^{*}$p$<$0.1; $^{**}$p$<$0.05; $^{***}$p$<$0.01} \\ 
+\end{tabular} 
+\end{table} 

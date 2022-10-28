@@ -170,8 +170,11 @@ class RND:
 
         pg_losses, ext_v_losses, int_v_losses, rnd_losses, entropies = [], [], [], [], []
 
+        if self.config["sampling_algo"] != "uniform":
+            self.memory.push_batch(total_next_obs, int_rewards)
+        else:
+            self.memory.push_batch(total_next_obs)
 
-        self.memory.push_batch(total_next_obs, int_rewards)
 
 
         for epoch in range(self.config["n_epochs"]):
