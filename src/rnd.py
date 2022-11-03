@@ -25,7 +25,6 @@ from heap import ReplayMemory
 import time
 
 torch.backends.cudnn.benchmark = True
-gpu = True
 
 class RND:
     def __init__(self, **config):
@@ -43,6 +42,7 @@ class RND:
             self.weight_model = WeightModel()
         else:    
             self.memory = DefaultMemory(self.config["mem_size"], self.config["n_workers"] * self.config["rollout_length"], self.config["obs_shape"])
+
 
 
 
@@ -64,7 +64,6 @@ class RND:
         #     self.predictor_model = PredictorModel(self.obs_shape, mcdropout=0.1).to(self.device)
         # elif self.config['algo'] == "RND-K":
         #     self.predictor_model = KPredictorModel(self.obs_shape).to(self.device)
-
         self.predictor_model = PredictorModel(self.obs_shape).to(self.device)
 
         self.target_model = TargetModel(self.obs_shape).to(self.device)
@@ -76,7 +75,7 @@ class RND:
 
         if torch.cuda.device_count() > 1 or True:
             print( "GPUs: ", torch.cuda.device_count())
-    
+
             self.predictor_model = DataParallel(self.predictor_model)
             self.current_policy = DataParallel(self.current_policy)
             self.target_model = DataParallel(self.target_model)
@@ -84,10 +83,19 @@ class RND:
             self.predictor_model.to(self.device)
             self.current_policy.to(self.device)
 
+            if self.config["use_weight_model"]:
+                self.weight_model = DataParallel(self.weight_model).to(self.device)
+
+
+
         self.total_trainable_params = list(self.current_policy.parameters()) + list(self.predictor_model.parameters())
         
         self.predictor_optimizer = Adam(self.predictor_model.parameters(), lr=self.config["lr"])
         self.policy_optimizer = Adam(self.current_policy.parameters(), lr=self.config["lr"])
+
+        if self.config["use_weight_model"]:
+            self.weight_model_params = self.weight_model.parameters()
+            self.weight_model_optimizer = Adam(self.weight_model.parameters(), lr=self.config["lr"])
 
         self.state_rms = RunningMeanStd(shape=self.obs_shape)
         self.int_reward_rms = RunningMeanStd(shape=(1,))
@@ -139,7 +147,7 @@ class RND:
 
         for idx in indices:
             yield states[idx], actions[idx], int_returns[idx], ext_returns[idx], advs[idx], \
-                  log_probs[idx], next_states[idx]
+                  log_probs[idx], next_states[idx], idx
 
 
 
@@ -168,8 +176,8 @@ class RND:
         n_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0 
         device_ids = [x for x in range(n_gpus)]
 
-        pg_losses, ext_v_losses, int_v_losses, rnd_losses, entropies = [], [], [], [], []
-
+        pg_losses, ext_v_losses, int_v_losses, rnd_losses, entropies, weight_model_losses = [], [], [], [], [], []
+        
         if self.config["sampling_algo"] != "uniform":
             self.memory.push_batch(total_next_obs, int_rewards)
         else:
@@ -178,7 +186,8 @@ class RND:
 
 
         for epoch in range(self.config["n_epochs"]):
-            for state, action, int_return, ext_return, adv, old_log_prob, next_state in self.choose_mini_batch(states=states,
+            weight_model_loss = 0
+            for state, action, int_return, ext_return, adv, old_log_prob, next_state, indices in self.choose_mini_batch(states=states,
                                                                                                                actions=actions,
                                                                                                                int_returns=int_rets,
                                                                                                                ext_returns=ext_rets,
@@ -213,34 +222,33 @@ class RND:
                 if self.config['sampling_algo'] in ["per", "per-v2", "per-v3"]:
 
                     if self.config["use_weight_model"]:
-                        self.memory.theta, self.memory.k, self.memory.c = self.weight_model()
+                        self.memory.theta, self.memory.k, self.memory.c = self.weight_model(torch.Tensor([int_rewards.mean()]))
+
+                    # minibatch = torch.Tensor(np.array(next_state)).to(self.device)
+                    # minibatch = torch.unsqueeze(minibatch, dim=1)
 
 
-                    state, idxs, is_weight = self.memory.sample(self.mini_batch_size)
+                    obs, indices, weights = self.memory.sample(self.mini_batch_size)
+                    error = self.calculate_rnd_loss(obs)
 
-                    minibatch = torch.Tensor(np.array(state)).to(self.device)
-                    minibatch = torch.unsqueeze(minibatch, dim=1)
-
-                    error = self.calculate_rnd_loss(minibatch)
 
                     # for idx, err in zip(idxs, error.detach().cpu().numpy().tolist()):
                     #     self.memory.update(idx, err)
-                    rnd_loss = error if is_weight is None else error * torch.Tensor(is_weight).to(self.device)
+                    rnd_loss = error if weights is None else error * torch.Tensor(weights.detach()).to(self.device)
                     rnd_loss = rnd_loss.mean()
 
-                    if self.config["use_weight_model"]:
-                        self.memory.theta, self.memory.k, self.memory.c = self.weight_model()
-                        weight_model_loss = rnd_loss
 
-                    if not self.memory.use_gamma:
-                        self.memory.update_priorities(idxs, error.detach().cpu().numpy())
+                    if not self.memory.use_gamma and not self.config["use_weight_model"]:
+                        self.memory.update_priorities(indices, error.detach().cpu().numpy())
 
                 
                 else:
                     state = self.memory.sample(self.mini_batch_size)
                     minibatch = torch.Tensor(np.array(state)).to(self.device)
-                    
-                    rnd_loss = self.calculate_rnd_loss(next_state).mean()
+                    rnd_loss = self.calculate_rnd_loss(minibatch).mean()
+
+                if self.config["use_weight_model"]:
+                    weight_model_loss =  - torch.sum(error.detach() * weights - error.detach())
 
 
 
@@ -258,12 +266,20 @@ class RND:
                 # torch.nn.utils.clip_grad_norm_(self.total_trainable_params, 0.5)
                 self.predictor_optimizer.step()
 
-                
                 rnd_losses.append(rnd_loss.item())
+
+                if self.config["use_weight_model"]:
+                    weight_model_losses.append(weight_model_loss.item())
+
+                    self.weight_model_optimizer.zero_grad()
+                    weight_model_loss.backward()
+                    # clip_grad_norm_(self.weight_model.parameters())
+                    # torch.nn.utils.clip_grad_norm_(self.total_trainable_params, 0.5)
+                    self.weight_model_optimizer.step()
 
 
                 # https://github.com/openai/random-network-distillation/blob/f75c0f1efa473d5109d487062fd8ed49ddce6634/ppo_agent.py#L187
-        return np.array(pg_losses).mean(), np.array(ext_v_losses).mean(), np.array(int_v_losses).mean(), np.array(rnd_losses).mean(), np.array(entropies).mean(), np.mean(advs)
+        return np.array(pg_losses).mean(), np.array(ext_v_losses).mean(), np.array(int_v_losses).mean(), np.array(rnd_losses).mean(), np.array(entropies).mean(), np.mean(advs), np.array(weight_model_losses).mean()
 
     def optimize(self, loss):
         self.optimizer.zero_grad()

@@ -7,6 +7,7 @@ import numpy as np
 from SumTree import SumTree
 from operator import itemgetter
 import matplotlib.pyplot as plt
+import torch
 
 # class Memory:  # stored as ( s, a, r, s_ ) in SumTree
 #     e = 0.01 
@@ -84,13 +85,13 @@ class PrioritizedReplay(object):
         self.buffer_unit_size = self.config["n_workers"] * self.config["rollout_length"]
         self.temp_counter = 0
 
-
+        self.device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
         self.config = config
         self.theta = config["theta"]
         self.c = config["c"]
         self.k = config["k"]
-        self.use_gamma = self.theta and self.k
-        self.gamma = lambda x: (x ** (self.k - 1) * np.exp(-x/self.theta)) / ((self.theta ** self.k) * np.math.gamma(self.k))
+        self.use_gamma = self.theta and self.k or self.config["use_weight_model"]        
+        self.gamma = lambda x: (x ** (self.k - 1) * torch.exp(-x/self.theta)) / ((self.theta ** self.k) * torch.exp(torch.lgamma(self.k)))
 
         self.distribution = None
         
@@ -260,23 +261,32 @@ class PrioritizedReplay(object):
         indices = np.random.choice([i for i in range(self.pos)], batch_size) 
 
         # gamma weighting
-        gamma_part = [self.gamma(x/self.buffer_unit_size) for x in range(self.pos)]
-        delta_part = [self.priorities[i] for i in range(self.pos)]
+        gamma_part = torch.Tensor([(x+1/self.buffer_unit_size) for x in range(self.pos)]).to(self.device)
+        gamma_part = torch.squeeze(self.gamma(gamma_part))
+        gamma_part = gamma_part / torch.sum(gamma_part) # to make it proportional 
+
+        # gamma_part = [self.gamma(x/self.buffer_unit_size) for x in range(self.pos)]
+        delta_part = torch.Tensor([self.priorities[i] for i in range(self.pos)]).to(self.device)
+        delta_part = delta_part / torch.sum(delta_part)
 
         #total_func = lambda g,d: ((g)/self.c + d/(1 - self.c)) ** self.alpha
         total_func = lambda g,d: (g*self.c + d*(1 - self.c)) ** self.alpha
+        samples_weight = gamma_part * self.c + (delta_part  ** self.alpha) * (1- self.c)
+        samples_weight = torch.squeeze(samples_weight)
+        # samples_weight = torch.Tensor(list(map(total_func, [gamma_part, delta_part])))
 
-        samples_weight = [total_func(g,d) for g,d in zip(gamma_part, delta_part)]
+        # samples_weight = [total_func(g,d) for g,d in zip(gamma_part, delta_part)]
         self.distribution = samples_weight
 
-        samples_weight = np.array(samples_weight, dtype=np.float32)
+        # samples_weight = np.array(samples_weight, dtype=np.float32)
 
         samples_weight = samples_weight[indices]
         samples = self.buffer[indices]
         samples = np.array([s[0] for s in samples], dtype=np.float32)
+        samples = torch.from_numpy(np.expand_dims(samples, axis=1)).to(self.device)
 
 
-        return samples, None, samples_weight
+        return samples, indices, samples_weight
 
 
     def sample(self, batch_size):

@@ -133,13 +133,14 @@ class Logger:
                 file.write(json.dumps(norm_scores))
 
     def log_distribution(self, probs):
+        probs = probs.detach()
         plt.plot([i for i in range(len(probs))], probs)
         wandb.log({"Gamma Distribution": wandb.Image(plt)}, step=self.iteration)
         plt.close()
 
     def log_iteration(self, *args):
 
-        n_frames, (pg_losses, ext_value_losses, int_value_losses, rnd_losses, entropies, advs), int_reward, ext_reward, action_prob, recording_int_rewards, age, age_percentage = args
+        n_frames, (pg_losses, ext_value_losses, int_value_losses, rnd_losses, entropies, advs, weight_model_losses), int_reward, ext_reward, action_prob, recording_int_rewards, age, age_percentage = args
         # self.running_act_prob = self.exp_avg(self.running_act_prob, action_prob)
         # self.running_int_reward = self.exp_avg(self.running_int_reward, int_reward)
         # self.running_training_logs = self.exp_avg(self.running_training_logs, np.array(training_logs))
@@ -156,9 +157,15 @@ class Logger:
             "Entropy": entropies,
             "Recording Int Reward" : recording_int_rewards,
             "Advantage": advs.item(),
+            "Weight Model Loss": weight_model_losses,
             # "Intrinsic Explained variance": self.running_training_logs[5],
             # "Extrinsic Explained variance": self.running_training_logs[6],
         }
+
+        if self.config["use_weight_model"]:
+            params["c"] = self.agent.memory.c.item()
+            params["theta"] = self.agent.memory.theta.item()
+            params["k"] = self.agent.memory.k.item()
 
         if age_percentage is not None:
             for a, p in zip(*age_percentage):

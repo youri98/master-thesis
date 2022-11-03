@@ -290,7 +290,7 @@ def train_model(config, add_noisy_tv=False, **kwargs):
             if config["record"]:
                 logger.log_recording(recording)
                 # logger.save_recording_local(iteration, recording)
-            if config["theta"] and config["k"]:
+            if agent.memory.distribution is not None:
                 logger.log_distribution(agent.memory.distribution)
 
             logger.time_stop("logging time")
@@ -332,12 +332,13 @@ if __name__ == '__main__':
     # config["algo"] = "RND"
     config["total_rollouts"] = 5000
     config["verbose"] = True
-    config["sampling_algo"] = "uniform"
+    config["sampling_algo"] = "per"
     config["mem_size"] = 4
     config["discard_intrinsic_reward"] = False
     # config["max_frames_per_episode"] = 20004
     config["record"] = True
     config["fix_beta"] = True
+    config["use_weight_model"] = True
 
     # config["k"] = 1
     # config["theta"] = 2

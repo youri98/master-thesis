@@ -249,10 +249,20 @@ class WeightModel(nn.Module, ABC):
 
     def __init__(self):
         super(WeightModel, self).__init__()
+        
+        rnn = nn.GRU(10, 20, 2)
+        input = torch.randn(5, 3, 10)
+        h0 = torch.randn(2, 3, 20)
+        output, hn = rnn(input, h0)
 
-        input_size = 10
+        num_layers = 2
+        hidden_size = 16
 
-        self.fc1 = nn.Linear(in_features=input_size, out_features=16)
+        self.epsilon = 0.1
+        self.rnn = nn.GRU(input_size=1, hidden_size=hidden_size, num_layers=num_layers, batch_first=False)
+        self.h0 = torch.randn(num_layers, hidden_size)
+
+        self.fc1 = nn.Linear(in_features=1, out_features=16)
         self.fc2 = nn.Linear(in_features=16, out_features=16)
 
         self.seq = nn.Sequential(self.fc1, self.fc2)
@@ -263,10 +273,21 @@ class WeightModel(nn.Module, ABC):
 
 
     def forward(self, input):
-        input = torch.ones(size=(1,10))
-        h = self.seq(input)
-        theta = F.relu(self.theta_layer(h))
-        k = F.relu(self.k_layer(h))
-        c = F.sigmoid(self.c_layer(h))
+        is_rnn = False
+
+        if not is_rnn:
+            h = self.seq(input)
+            theta = torch.sigmoid(self.theta_layer(h)) * 4 + self.epsilon
+            k = torch.sigmoid(self.k_layer(h)) * 2 + self.epsilon
+            c = torch.sigmoid(self.c_layer(h))
+        else:
+            input = torch.unsqueeze(input, dim=0)
+            output, hn = self.rnn(input, self.h0)
+            self.h0 = hn.detach()
+
+            theta = F.relu(self.theta_layer(output)) + self.epsilon
+            k = F.relu(self.k_layer(output)) + self.epsilon
+            c = F.sigmoid(self.c_layer(output))
+
 
         return theta, k, c
