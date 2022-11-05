@@ -132,9 +132,17 @@ class Logger:
 
                 file.write(json.dumps(norm_scores))
 
-    def log_distribution(self, probs):
-        probs = probs.detach()
-        plt.plot([i for i in range(len(probs))], probs)
+    def log_distribution(self, probs, plot_gamma=False):
+        if not isinstance(probs, np.ndarray):
+            probs = probs.detach()
+
+        plt.bar([i for i in range(len(probs))], probs)
+
+        if plot_gamma:
+            gamma = self.agent.memory.gamma(torch.Tensor([(i+1)/(self.agent.memory.buffer_unit_size+1) for i in range(len(probs))])).detach().numpy()
+            gamma = gamma / gamma.sum()
+            plt.plot([i for i in range(len(probs))], gamma)
+
         wandb.log({"Gamma Distribution": wandb.Image(plt)}, step=self.iteration)
         plt.close()
 

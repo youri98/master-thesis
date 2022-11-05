@@ -234,7 +234,11 @@ class RND:
 
                     # for idx, err in zip(idxs, error.detach().cpu().numpy().tolist()):
                     #     self.memory.update(idx, err)
-                    rnd_loss = error if weights is None else error * torch.Tensor(weights.detach()).to(self.device)
+                    if weights is None:
+                        rnd_loss = error
+                    else:
+                        rnd_loss = error * weights.detach()
+
                     rnd_loss = rnd_loss.mean()
 
 

@@ -5,7 +5,7 @@ def get_params():
     parser = argparse.ArgumentParser(
         description="Variable parameters based on the configuration of the machine or user's choice")
 
-    parser.add_argument("--n_workers", default=2, type=int, help="Number of parallel environments.")
+    parser.add_argument("--n_workers", default=None, type=int, help="Number of parallel environments.")
     parser.add_argument("--interval", default=None,
                         help="The interval specifies how often different parameters should be saved and printed,"
                              " counted by iterations.")

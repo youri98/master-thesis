@@ -175,13 +175,20 @@ class PrioritizedReplay(object):
             self.priorities[:len(states)] = self.max_prio
             self.priority_age[:len(states)] = 1
             self.priority_age[len(states):] += 1
+            
+            self.max_prio = self.priorities[-1] # not including the maximal appendage as this results in highly skewed towards recent ones
+
         else:
             self.buffer[self.pos:self.pos + len(states)] = states
             self.priority_age[:min(self.pos + len(states), len(self.priority_age))] += 1
             self.priorities[:len(self.buffer)] = self.max_prio
             self.pos += len(states)
 
-        self.max_prio = self.priorities.max() # gives max priority if buffer is not empty else 1
+            self.max_prio = self.priorities.max() # gives max priority if buffer is not empty else 1
+
+        
+        self.distribution = self.priorities.copy() # for plotting distribution
+
     
     def push_per3_batch(self, states, errors):
 
@@ -261,7 +268,7 @@ class PrioritizedReplay(object):
         indices = np.random.choice([i for i in range(self.pos)], batch_size) 
 
         # gamma weighting
-        gamma_part = torch.Tensor([(x+1/self.buffer_unit_size) for x in range(self.pos)]).to(self.device)
+        gamma_part = torch.Tensor([((x+1)/(self.buffer_unit_size+1)) for x in range(self.pos)]).to(self.device)
         gamma_part = torch.squeeze(self.gamma(gamma_part))
         gamma_part = gamma_part / torch.sum(gamma_part) # to make it proportional 
 
@@ -320,7 +327,11 @@ class PrioritizedReplay(object):
             weights  = np.array(weights, dtype=np.float32) 
 
             samples = np.array([s[0] for s in samples], dtype=np.float32)
-            
+            samples = torch.from_numpy(np.expand_dims(samples, axis=1)).to(self.device)
+
+            weights = torch.from_numpy(weights).to(self.device)
+
+
             return samples, indices, weights
 
     def get_time(self):

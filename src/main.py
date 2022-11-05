@@ -34,7 +34,9 @@ def train_model(config, add_noisy_tv=False, **kwargs):
         config.update({"n_actions": 1})
 
     temp_env.close()
-    config["n_workers"] = multiprocessing.cpu_count() #* torch.cuda.device_count() if torch.cuda.is_available() else multiprocessing.cpu_count()
+
+    if config["n_workers"] is None:
+        config["n_workers"] = multiprocessing.cpu_count() #* torch.cuda.device_count() if torch.cuda.is_available() else multiprocessing.cpu_count()
     # config["n_workers"] = 56
     config.update({"batch_size": (config["rollout_length"] * config["n_workers"]) // config["n_mini_batch"]})
     config.update({"predictor_proportion": 32 / config["n_workers"]})
@@ -291,7 +293,7 @@ def train_model(config, add_noisy_tv=False, **kwargs):
                 logger.log_recording(recording)
                 # logger.save_recording_local(iteration, recording)
             if agent.memory.distribution is not None:
-                logger.log_distribution(agent.memory.distribution)
+                logger.log_distribution(agent.memory.distribution, plot_gamma=agent.memory.use_gamma)
 
             logger.time_stop("logging time")
             logger.time_start()
@@ -330,15 +332,16 @@ if __name__ == '__main__':
     # config.update({"state_shape": (2,), "obs_shape": (2,)})
     # config["total_rollouts"] = int(7)
     # config["algo"] = "RND"
+    config["n_workers"] = 4
     config["total_rollouts"] = 5000
     config["verbose"] = True
-    config["sampling_algo"] = "per"
+    config["sampling_algo"] = "per-v2"
     config["mem_size"] = 4
     config["discard_intrinsic_reward"] = False
     # config["max_frames_per_episode"] = 20004
     config["record"] = True
     config["fix_beta"] = True
-    config["use_weight_model"] = True
+    # config["use_weight_model"] = True
 
     # config["k"] = 1
     # config["theta"] = 2

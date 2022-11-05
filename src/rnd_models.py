@@ -255,7 +255,7 @@ class WeightModel(nn.Module, ABC):
         h0 = torch.randn(2, 3, 20)
         output, hn = rnn(input, h0)
 
-        num_layers = 2
+        num_layers = 1
         hidden_size = 16
 
         self.epsilon = 0.1
@@ -285,9 +285,9 @@ class WeightModel(nn.Module, ABC):
             output, hn = self.rnn(input, self.h0)
             self.h0 = hn.detach()
 
-            theta = F.relu(self.theta_layer(output)) + self.epsilon
-            k = F.relu(self.k_layer(output)) + self.epsilon
-            c = F.sigmoid(self.c_layer(output))
+            theta = torch.sigmoid(self.theta_layer(output)) * 4 + self.epsilon
+            k = torch.sigmoid(self.k_layer(output)) * 2 + self.epsilon
+            c = torch.sigmoid(self.c_layer(output))
 
 
         return theta, k, c
