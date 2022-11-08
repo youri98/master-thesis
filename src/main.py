@@ -292,7 +292,7 @@ def train_model(config, add_noisy_tv=False, **kwargs):
             if config["record"]:
                 logger.log_recording(recording)
                 # logger.save_recording_local(iteration, recording)
-            if agent.memory.distribution is not None:
+            if config["log_distribution"] and agent.memory.distribution is not None:
                 logger.log_distribution(agent.memory.distribution, plot_gamma=agent.memory.use_gamma)
 
             logger.time_stop("logging time")
