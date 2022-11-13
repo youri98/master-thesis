@@ -21,7 +21,7 @@ def get_params():
     parser.add_argument("--res", default=(84,84), nargs='+', type=int, help="tuple 2D of resolution")
     parser.add_argument("--mem_size", default=1, type=int, help="relative size of memory")
     parser.add_argument("--discard_intrinsic_reward", default=False, action="store_true", help="Discard intrinsic reward and only use extrinsic reward")
-    parser.add_argument("--sampling_algo", default="uniform", choices=["uniform", "per", "per-v2"], help="way of sampling from replay buffer")
+    parser.add_argument("--sampling_algo", default="uniform", choices=["uniform", "per", "per-v2", "prioritize-room"], help="way of sampling from replay buffer")
     parser.add_argument("--fix_beta", default=False, action="store_true", help="whether to anneal bias")
     parser.add_argument("--beta", default=0, type=float, help="beta start")
     parser.add_argument("--alpha", default=1, type=float, help="alpha")

@@ -36,7 +36,7 @@ class RND:
         self.continuous = "Continuous" in self.config["env"]
 
 
-        if self.config["sampling_algo"] in ["per", "per-v2", "per-v3"]:
+        if self.config["sampling_algo"] != "uniform":
             self.memory_capacity = self.config["n_workers"] * self.config["rollout_length"] * self.config["mem_size"] 
             self.memory = PrioritizedReplay(self.memory_capacity, config=self.config) #beta_frames=10**6)
             self.weight_model = WeightModel()
@@ -153,7 +153,7 @@ class RND:
 
     def train(self, states, actions, int_rewards,
               ext_rewards, dones, int_values, ext_values,
-              log_probs, next_int_values, next_ext_values, total_next_obs):
+              log_probs, next_int_values, next_ext_values, total_next_obs, infos):
         
 
         int_rets = self.get_gae(int_rewards, int_values, next_int_values,
@@ -179,7 +179,7 @@ class RND:
         pg_losses, ext_v_losses, int_v_losses, rnd_losses, entropies, weight_model_losses = [], [], [], [], [], []
         
         if self.config["sampling_algo"] != "uniform":
-            self.memory.push_batch(total_next_obs, int_rewards)
+            self.memory.push_batch(total_next_obs, int_rewards, infos)
         else:
             self.memory.push_batch(total_next_obs)
 
@@ -219,7 +219,7 @@ class RND:
                 int_v_losses.append(int_value_loss.item())
                 entropies.append(entropy.item())
 
-                if self.config['sampling_algo'] in ["per", "per-v2", "per-v3"]:
+                if self.config['sampling_algo'] != "uniform":
 
                     if self.config["use_weight_model"]:
                         self.memory.theta, self.memory.k, self.memory.c = self.weight_model(torch.Tensor([int_rewards.mean()]))
@@ -242,7 +242,7 @@ class RND:
                     rnd_loss = rnd_loss.mean()
 
 
-                    if not self.memory.use_gamma and not self.config["use_weight_model"]:
+                    if not self.memory.use_gamma and not self.config["use_weight_model"] and not self.config["sampling_algo"] == "prioritize-room":
                         self.memory.update_priorities(indices, error.detach().cpu().numpy())
 
                 

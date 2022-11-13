@@ -80,6 +80,8 @@ class PrioritizedReplay(object):
         self.pos        = 0
         self.priorities = np.zeros((capacity,), dtype=np.float32)
         self.priority_age = np.zeros((capacity,), dtype=np.uint8)
+        self.state_room = np.zeros((capacity,), dtype=np.uint8)
+
         self.max_prio = 1.0
         self.fix_beta = config["fix_beta"]
         self.buffer_unit_size = self.config["n_workers"] * self.config["rollout_length"]
@@ -92,6 +94,7 @@ class PrioritizedReplay(object):
         self.k = config["k"]
         self.use_gamma = self.theta and self.k or self.config["use_weight_model"]        
         self.gamma = lambda x: (x ** (self.k - 1) * torch.exp(-x/self.theta)) / ((self.theta ** self.k) * torch.exp(torch.lgamma(self.k)))
+        self.current_rooms = np.zeros(config["n_workers"], dtype=np.uint8)
 
         self.distribution = None
         
@@ -150,7 +153,7 @@ class PrioritizedReplay(object):
 
             self.pos += len(states)
     
-    def push_batch(self, states, int_rewards):
+    def push_batch(self, states, int_rewards, infos):
         if self.use_gamma:
             self.push_gamma(states, int_rewards)
         elif self.config["sampling_algo"] == "per":
@@ -159,9 +162,39 @@ class PrioritizedReplay(object):
             self.push_per2_batch(states)
         elif self.config["sampling_algo"] == "per-v3":
             self.push_per3_batch(states, int_rewards)
+        elif self.config["sampling_algo"] == "prioritize-room":
+            self.push_prioritize_room(states, int_rewards, infos)
+
+
+    def push_prioritize_room(self, states, int_rewards, infos):
+        int_rewards = int_rewards.flatten()
+
+        # infos = [x for info in infos for x in info] # flatten
+
+        infos = [[max(x["episode"]["visited_room"]) if "episode" in x else 0 for x in info] for info in infos]
+        
+        infos = np.array(infos, dtype=np.uint8)
+        self.current_rooms = infos[-1]
+
+
+
+
+        self.buffer[self.pos: self.pos + len(states)] = states
+        self.priorities = np.ones((self.capacity,), dtype=np.uint8)
+        self.state_room[self.pos: self.pos + len(states)] = infos.flatten()
+
+        room_priority = np.isin(self.state_room, self.current_rooms).flatten()#.astype(np.uint8)
+
+        self.priorities[room_priority] *= 10 # increase corresponding rooms
+        
+        
+        self.pos = np.mod(self.pos + len(states), self.capacity)
+
+        self.distribution = self.priorities.copy() # for plotting distribution
+
+
 
     def push_per2_batch(self, states):
-
         # sort
         if self.pos >= self.capacity:
             temp = list(zip(self.buffer, self.priorities, self.priority_age))

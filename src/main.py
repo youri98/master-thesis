@@ -117,14 +117,10 @@ def train_model(config, add_noisy_tv=False, **kwargs):
         init_log_probs = np.zeros(rollout_base_shape)
         init_completion_time = np.zeros(rollout_base_shape, dtype=np.int16)
 
-        if "MountainCar" in config["env"]:
-            init_next_states = np.zeros((rollout_base_shape[0],) + config["state_shape"], dtype=np.float32)
-            init_next_obs = np.zeros(rollout_base_shape + config["obs_shape"], dtype=np.float32)
-            init_states = np.zeros(rollout_base_shape + config["state_shape"], dtype=np.float32)
-        else:
-            init_next_states = np.zeros((rollout_base_shape[0],) + config["state_shape"], dtype=np.uint8)
-            init_next_obs = np.zeros(rollout_base_shape + config["obs_shape"], dtype=np.uint8)
-            init_states = np.zeros(rollout_base_shape + config["state_shape"], dtype=np.uint8)
+
+        init_next_states = np.zeros((rollout_base_shape[0],) + config["state_shape"], dtype=np.uint8)
+        init_next_obs = np.zeros(rollout_base_shape + config["obs_shape"], dtype=np.uint8)
+        init_states = np.zeros(rollout_base_shape + config["state_shape"], dtype=np.uint8)
 
         recording = []
         
@@ -147,6 +143,7 @@ def train_model(config, add_noisy_tv=False, **kwargs):
             next_states = init_next_states
             total_next_obs = init_next_obs
             total_completion_time = init_completion_time
+            total_infos = []
             # print("iteration how many frames", total_states.shape)
 
             logger.time_start()
@@ -173,8 +170,6 @@ def train_model(config, add_noisy_tv=False, **kwargs):
                         cum_hits += 1
                         cum_ext_reward += r
 
-                    if "MountainCar" in config["env"]:
-                        total_completion_time[worker_id, t] = info["completion_time"] 
 
 
                         
@@ -199,17 +194,18 @@ def train_model(config, add_noisy_tv=False, **kwargs):
                 #     print("heee")
 
 
-                if "MountainCar" not in config["env"]:
-                    if total_dones[0, t]:
-                        # print("episode: ", episode)
-                        episode += 1
-                        if "episode" in infos[0]:
+                if total_dones[0, t]:
+                    # print("episode: ", episode)
+                    episode += 1
+                    if "episode" in infos[0]:
 
-                            visited_rooms = infos[0]["episode"]["visited_room"]
-                            logger.log_episode(episode, episode_ext_reward, visited_rooms)
-                            # if episode_ext_reward != 0:
-                            #     print(episode_ext_reward)
-                        episode_ext_reward = 0
+                        visited_rooms = infos[0]["episode"]["visited_room"]
+                        logger.log_episode(episode, episode_ext_reward, visited_rooms)
+                        # if episode_ext_reward != 0:
+                        #     print(episode_ext_reward)
+                    episode_ext_reward = 0
+
+                total_infos.append(infos)
                  
 
 
@@ -250,7 +246,8 @@ def train_model(config, add_noisy_tv=False, **kwargs):
                             log_probs=concatenate(total_log_probs),
                             next_int_values=next_int_values,
                             next_ext_values=next_ext_values,
-                            total_next_obs=total_next_obs)
+                            total_next_obs=total_next_obs,
+                            infos=total_infos)
 
             logger.time_stop("training time")
             n_frames = total_states.shape[0] * total_states.shape[1] * total_states.shape[2] * (iteration + 1)
@@ -271,13 +268,7 @@ def train_model(config, add_noisy_tv=False, **kwargs):
                                         age, age_percentage
                                         )
 
-            if "MountainCar" in config["env"]:
-                cum_dones += concatenate(total_dones).sum()
 
-                mean_completion_time = np.true_divide(concatenate(total_completion_time).sum(),(concatenate(total_completion_time)!=0).sum())
-
-                logger.log_mountaincar_states(concatenate(total_states), concatenate(total_dones).sum(), hits, cum_hits, cum_ext_reward, cum_dones, mean_completion_time)
-            
                 
 
             
@@ -335,7 +326,9 @@ if __name__ == '__main__':
     config["n_workers"] = 4
     config["total_rollouts"] = 5000
     config["verbose"] = True
-    config["sampling_algo"] = "per-v2"
+    config["sampling_algo"] = "prioritize-room"
+    config["log_distribution"] = True
+
     config["mem_size"] = 4
     config["discard_intrinsic_reward"] = False
     # config["max_frames_per_episode"] = 20004
