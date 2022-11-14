@@ -31,6 +31,7 @@ def get_params():
     parser.add_argument("--use_weight_model", default=False, action="store_true", help="weight model to determine theta, k, and c")
     parser.add_argument("--without_maximal_appending", default=False, action="store_true", help="if to use maximal priority appending when using PER")
     parser.add_argument("--log_distribution", default=False, action="store_true", help="Whether to plot a distribution of the priorities")
+    parser.add_argument("--factor-same-room", default=10)
 
     parser.add_argument("--total_frames", default=int(1e9), type=int, help="Total number of frames")
     # parser.add_argument("--do_test", action="store_true",

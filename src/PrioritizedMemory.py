@@ -185,7 +185,7 @@ class PrioritizedReplay(object):
 
         room_priority = np.isin(self.state_room, self.current_rooms).flatten()#.astype(np.uint8)
 
-        self.priorities[room_priority] *= 10 # increase corresponding rooms
+        self.priorities[room_priority] *= self.config["factor-same-room"] # increase corresponding rooms
         
         
         self.pos = np.mod(self.pos + len(states), self.capacity)
