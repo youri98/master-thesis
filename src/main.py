@@ -323,7 +323,7 @@ if __name__ == '__main__':
     # config.update({"state_shape": (2,), "obs_shape": (2,)})
     # config["total_rollouts"] = int(7)
     # config["algo"] = "RND"
-    config["n_workers"] = 4
+    config["n_workers"] = 1
     config["total_rollouts"] = 5000
     config["verbose"] = True
     config["sampling_algo"] = "prioritize-room"

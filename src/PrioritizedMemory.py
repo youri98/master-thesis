@@ -121,13 +121,14 @@ class PrioritizedReplay(object):
         # max_prio = self.priorities.max() if self.buffer else 1.0 # gives max priority if buffer is not empty else 1
         # temp = list(zip(self.buffer, self.priorities, self.priority_age))
         # temp.sort(key=itemgetter(1))
+        self.max_prio = self.priorities.max()
+
         int_rewards = int_rewards.flatten()
 
         self.buffer[self.pos: self.pos + len(states)] = states
         
         self.priorities[self.pos:self.pos + len(states)] = int_rewards if self.config["without_maximal_appending"] else self.max_prio 
         self.pos = (self.pos + len(states)) % self.capacity # lets the pos circle in the ranges of capacity if pos+1 > cap --> new posi = 0
-        self.max_prio = self.priorities.max()
     
     def push_gamma(self, states, int_rewards):
         int_rewards = int_rewards.flatten()
@@ -180,17 +181,19 @@ class PrioritizedReplay(object):
 
 
         self.buffer[self.pos: self.pos + len(states)] = states
-        self.priorities = np.ones((self.capacity,), dtype=np.uint8)
+        self.priorities[self.pos: self.pos + len(states)] = int_rewards
         self.state_room[self.pos: self.pos + len(states)] = infos.flatten()
 
         room_priority = np.isin(self.state_room, self.current_rooms).flatten()#.astype(np.uint8)
 
-        self.priorities[room_priority] *= self.config["factor-same-room"] # increase corresponding rooms
+        self.priorities[room_priority] = self.max_prio # increase corresponding rooms
         
         
         self.pos = np.mod(self.pos + len(states), self.capacity)
 
         self.distribution = self.priorities.copy() # for plotting distribution
+        self.max_prio = self.priorities.max()
+
 
 
 

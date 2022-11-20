@@ -296,6 +296,8 @@ class RND:
         lam = self.config["lambda"]  # Make code faster.
         returns = [[] for _ in range(self.config["n_workers"])]
         extended_values = np.zeros((self.config["n_workers"], self.config["rollout_length"] + 1))
+        if next_values.size == 1:
+            next_values = np.expand_dims(next_values, 0)
         for worker in range(self.config["n_workers"]):
             extended_values[worker] = np.append(values[worker], next_values[worker])
             gae = 0
