@@ -346,7 +346,11 @@ class PrioritizedReplay(object):
                 
             # calc P = p^a/sum(p^a)
             probs  = prios ** self.alpha
-            P = probs/probs.sum()
+
+            if probs.sum() != 0:
+                P = probs/probs.sum()
+            else: 
+                P = np.ones(len(probs)) / len(probs)
             
             #gets the indices depending on the probability p
             indices = np.random.choice(N, batch_size, p=P) 

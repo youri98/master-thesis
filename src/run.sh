@@ -9,4 +9,4 @@
 
 module load cuda10.2/toolkit/10.2.89
 
-python run_on_hpc.py --total_rollouts 40000 --algo RND --sampling_algo per --mem_size 8 --fix_beta --beta 0 --alpha 1
+python run_on_hpc.py --total_rollouts 40000 --algo RND --sampling_algo per --mem_size 256 --fix_beta --beta 0 --alpha 1
