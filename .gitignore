@@ -145,7 +145,7 @@ todo.txt
 /PPO-RND
 /wandb
 .vscode
-#key.txt
+key.txt
 sshkey.txt
 src/Models/
 src/wandb
