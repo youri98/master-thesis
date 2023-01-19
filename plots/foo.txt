@@ -1,0 +1,157 @@
+
+Models
+==============================================================================================================
+                                                           Dependent variable:                                
+                            ----------------------------------------------------------------------------------
+                                                         Visited Number of Rooms                              
+                                        (1)                         (2)                        (3)            
+--------------------------------------------------------------------------------------------------------------
+algoexponential                      -0.394***                   -0.771***                    -0.153          
+                                      (0.063)                     (0.130)                    (0.118)          
+                                                                                                              
+algoPER                              -0.539***                   -1.047***                  -0.715***         
+                                      (0.069)                     (0.127)                    (0.166)          
+                                                                                                              
+algoPER-v2                            -0.178**                     -0.147                   -0.541***         
+                                      (0.070)                     (0.127)                    (0.147)          
+                                                                                                              
+algoproportional                     -1.110***                     -0.099                     0.193*          
+                                      (0.059)                     (0.114)                    (0.106)          
+                                                                                                              
+log(frame)                            2.328***                    2.328***                   1.213***         
+                                      (0.021)                     (0.020)                    (0.122)          
+                                                                                                              
+mem_size16                           -0.461***                   -0.754***                                    
+                                      (0.097)                     (0.165)                                     
+                                                                                                              
+mem_size2                              -0.107                      -0.136                                     
+                                      (0.075)                     (0.114)                                     
+                                                                                                              
+mem_size4                            -0.586***                    -0.293**                                    
+                                      (0.073)                     (0.114)                                     
+                                                                                                              
+mem_size6                            -0.375***                    -0.276**                                    
+                                      (0.073)                     (0.114)                                     
+                                                                                                              
+mem_size64                           -0.787***                     -0.186                                     
+                                      (0.100)                     (0.171)                                     
+                                                                                                              
+mem_size8                            -0.292***                    0.634***                                    
+                                      (0.071)                     (0.114)                                     
+                                                                                                              
+algoexponential:mem_size16                                                                                    
+                                                                                                              
+                                                                                                              
+algoPER:mem_size16                                                1.682***                                    
+                                                                  (0.174)                                     
+                                                                                                              
+algoPER-v2:mem_size16                                                                                         
+                                                                                                              
+                                                                                                              
+algoproportional:mem_size16                                                                                   
+                                                                                                              
+                                                                                                              
+algoexponential:mem_size2                                         0.456**                                     
+                                                                  (0.193)                                     
+                                                                                                              
+algoPER:mem_size2                                                                                             
+                                                                                                              
+                                                                                                              
+algoPER-v2:mem_size2                                               -0.103                                     
+                                                                  (0.191)                                     
+                                                                                                              
+algoproportional:mem_size2                                         -0.161                                     
+                                                                  (0.171)                                     
+                                                                                                              
+algoexponential:mem_size4                                         0.843***                                    
+                                                                  (0.193)                                     
+                                                                                                              
+algoPER:mem_size4                                                 0.958***                                    
+                                                                  (0.191)                                     
+                                                                                                              
+algoPER-v2:mem_size4                                              -0.492**                                    
+                                                                  (0.191)                                     
+                                                                                                              
+algoproportional:mem_size4                                       -1.577***                                    
+                                                                  (0.171)                                     
+                                                                                                              
+algoexponential:mem_size6                                         1.268***                                    
+                                                                  (0.182)                                     
+                                                                                                              
+algoPER:mem_size6                                                  -0.147                                     
+                                                                  (0.180)                                     
+                                                                                                              
+algoPER-v2:mem_size6                                                                                          
+                                                                                                              
+                                                                                                              
+algoproportional:mem_size6                                       -0.731***                                    
+                                                                  (0.171)                                     
+                                                                                                              
+algoexponential:mem_size64                                                                                    
+                                                                                                              
+                                                                                                              
+algoPER:mem_size64                                                 -0.270                                     
+                                                                  (0.180)                                     
+                                                                                                              
+algoPER-v2:mem_size64                                                                                         
+                                                                                                              
+                                                                                                              
+algoproportional:mem_size64                                                                                   
+                                                                                                              
+                                                                                                              
+algoexponential:mem_size8                                        -0.916***                                    
+                                                                  (0.182)                                     
+                                                                                                              
+algoPER:mem_size8                                                                                             
+                                                                                                              
+                                                                                                              
+algoPER-v2:mem_size8                                                                                          
+                                                                                                              
+                                                                                                              
+algoproportional:mem_size8                                       -2.734***                                    
+                                                                  (0.171)                                     
+                                                                                                              
+poly(frame, 3)1                                                                             84.249***         
+                                                                                             (8.702)          
+                                                                                                              
+poly(frame, 3)2                                                                             -28.885***        
+                                                                                             (3.802)          
+                                                                                                              
+poly(frame, 3)3                                                                              7.523***         
+                                                                                             (2.475)          
+                                                                                                              
+poly(mem_size, 3)1                                                                         -462.828***        
+                                                                                             (37.069)         
+                                                                                                              
+poly(mem_size, 3)2                                                                          -10.122***        
+                                                                                             (3.280)          
+                                                                                                              
+poly(mem_size, 3)3                                                                           7.581**          
+                                                                                             (3.140)          
+                                                                                                              
+algodefault:mem_size                                                                         0.324***         
+                                                                                             (0.022)          
+                                                                                                              
+algoexponential:mem_size                                                                     0.252***         
+                                                                                             (0.024)          
+                                                                                                              
+algoPER:mem_size                                                                             0.318***         
+                                                                                             (0.027)          
+                                                                                                              
+algoPER-v2:mem_size                                                                          0.331***         
+                                                                                             (0.027)          
+                                                                                                              
+algoproportional:mem_size                                                                                     
+                                                                                                              
+                                                                                                              
+Constant                             -37.597***                  -37.825***                 -19.229***        
+                                      (0.420)                     (0.399)                    (2.417)          
+                                                                                                              
+--------------------------------------------------------------------------------------------------------------
+Observations                           7,200                       7,200                      7,200           
+R2                                     0.640                       0.678                      0.658           
+Adjusted R2                            0.640                       0.677                      0.657           
+Residual Std. Error              1.648 (df = 7188)           1.559 (df = 7174)          1.608 (df = 7184)     
+F Statistic                 1,162.183*** (df = 11; 7188) 605.595*** (df = 25; 7174) 920.753*** (df = 15; 7184)
+==============================================================================================================
+Note:                                                                              *p<0.1; **p<0.05; ***p<0.01
